@@ -61,37 +61,28 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
   }
 
   Future<void> _downloadQr() async {
-    final status = await Permission.storage.request();
-    if (status.isGranted || await Permission.photos.request().isGranted) {
-      try {
-        final Uint8List? image = await _screenshotController.capture();
-        if (image != null) {
-          final result = await ImageGallerySaverPlus.saveImage(
-            image,
-            quality: 100,
-            name: "QR_${widget.qr['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
-          );
-          if (result['isSuccess']) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('QR Code saved to gallery!'), backgroundColor: Colors.green),
-              );
-            }
-          } else {
-            throw Exception('Failed to save');
+    try {
+      final Uint8List? image = await _screenshotController.capture();
+      if (image != null) {
+        final result = await ImageGallerySaverPlus.saveImage(
+          image,
+          quality: 100,
+          name: "QR_${widget.qr['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
+        );
+        if (result['isSuccess']) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('QR Code saved to gallery!'), backgroundColor: Colors.green),
+            );
           }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error saving image: $e'), backgroundColor: Colors.red),
-          );
+        } else {
+          throw Exception('Failed to save');
         }
       }
-    } else {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Storage permission is required to save images.'), backgroundColor: Colors.orange),
+          SnackBar(content: Text('Error saving image. Make sure storage permission is granted.'), backgroundColor: Colors.red),
         );
       }
     }

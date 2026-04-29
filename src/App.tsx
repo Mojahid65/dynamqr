@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CreateQR from './pages/CreateQR';
+import Redirect from './pages/Redirect';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { session } = useAuth();
@@ -32,6 +33,7 @@ function App() {
                 <CreateQR />
               </PrivateRoute>
             } />
+            <Route path="/:shortCode" element={<Redirect />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>

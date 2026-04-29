@@ -1,4 +1,4 @@
-package com.dynamqr.mojahidx.in
+package com.dynamqr.mojahidx.`in`
 
 import io.flutter.embedding.android.FlutterActivity
 
