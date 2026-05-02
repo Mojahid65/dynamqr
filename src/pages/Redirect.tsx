@@ -13,7 +13,7 @@ export default function Redirect() {
         const { data, error } = await supabase
           .from('qr_codes')
           .select('destination_url')
-          .eq('short_code', shortCode)
+          .or(`short_code.eq.${shortCode},keyword.eq.${shortCode}`)
           .single();
 
         if (error || !data) {

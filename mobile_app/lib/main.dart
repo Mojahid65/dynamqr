@@ -2,78 +2,147 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/constants.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/create_qr_screen.dart';
 import 'screens/edit_qr_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/qr_fullscreen_screen.dart';
+import 'package:provider/provider.dart';
+import 'providers/theme_provider.dart';
+import 'core/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  await NotificationService().init();
   
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
   );
 
-  runApp(const MyApp());
+  final prefs = await SharedPreferences.getInstance();
+  final hasCompletedOnboarding = prefs.getBool('has_completed_onboarding') ?? false;
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: MyApp(hasCompletedOnboarding: hasCompletedOnboarding),
+    ),
+  );
 }
 
-final _router = GoRouter(
-  initialLocation: '/',
-  redirect: (context, state) {
-    final session = Supabase.instance.client.auth.currentSession;
-    final isGoingToLogin = state.matchedLocation == '/login';
-    
-    if (session == null && !isGoingToLogin) {
-      return '/login';
-    }
-    if (session != null && isGoingToLogin) {
-      return '/';
-    }
-    return null;
-  },
-  routes: [
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const DashboardScreen(),
-    ),
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
-    GoRoute(
-      path: '/create',
-      builder: (context, state) => const CreateQrScreen(),
-    ),
-    GoRoute(
-      path: '/edit',
-      builder: (context, state) {
-        final qrData = state.extra as Map<String, dynamic>;
-        return EditQrScreen(qrData: qrData);
-      },
-    ),
-  ],
-);
-
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool hasCompletedOnboarding;
+
+  const MyApp({super.key, required this.hasCompletedOnboarding});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Dynamic QR Hub',
-      theme: ThemeData(
+    final router = GoRouter(
+      initialLocation: hasCompletedOnboarding ? '/' : '/onboarding',
+      redirect: (context, state) {
+        final session = Supabase.instance.client.auth.currentSession;
+        final isGoingToLogin = state.matchedLocation == '/login';
+        final isGoingToOnboarding = state.matchedLocation == '/onboarding';
+        
+        if (!hasCompletedOnboarding && !isGoingToOnboarding) {
+            return '/onboarding';
+        }
+
+        if (hasCompletedOnboarding && isGoingToOnboarding) {
+            return '/';
+        }
+
+        if (session == null && !isGoingToLogin && !isGoingToOnboarding) {
+          return '/login';
+        }
+        if (session != null && isGoingToLogin) {
+          return '/';
+        }
+        return null;
+      },
+      routes: [
+        GoRoute(
+          path: '/onboarding',
+          builder: (context, state) => const OnboardingScreen(),
+        ),
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const DashboardScreen(),
+        ),
+        GoRoute(
+          path: '/login',
+          builder: (context, state) => const LoginScreen(),
+        ),
+        GoRoute(
+          path: '/create',
+          builder: (context, state) => const CreateQrScreen(),
+        ),
+        GoRoute(
+          path: '/edit',
+          builder: (context, state) {
+            final qrData = state.extra as Map<String, dynamic>;
+            return EditQrScreen(qrData: qrData);
+          },
+        ),
+        GoRoute(
+          path: '/qr_fullscreen',
+          builder: (context, state) {
+            final args = state.extra as Map<String, dynamic>;
+            return QrFullscreenScreen(
+              qrData: args['qrData'],
+              shortUrl: args['shortUrl'],
+              selectedTheme: args['selectedTheme'],
+              selectedColor: args['selectedColor'],
+              selectedEyeColor: args['selectedEyeColor'],
+            );
+          },
+        ),
+      ],
+    );
+
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp.router(
+          title: 'Dynamic QR Hub',
+          themeMode: themeProvider.themeMode, 
+          theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.indigo,
           brightness: Brightness.light,
         ),
         useMaterial3: true,
+        scaffoldBackgroundColor: Colors.grey.shade50,
         textTheme: GoogleFonts.interTextTheme(
-          Theme.of(context).textTheme,
+          ThemeData.light().textTheme,
         ),
       ),
-      routerConfig: _router,
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.indigo,
+          brightness: Brightness.dark,
+        ).copyWith(
+          surface: Colors.black, // AMOLED dark surface
+          onSurface: Colors.white,
+        ),
+        scaffoldBackgroundColor: Colors.black, // AMOLED dark scaffold
+        cardColor: const Color(0xFF121212), // Slightly lighter for cards to contrast
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.black,
+          surfaceTintColor: Colors.black,
+        ),
+        textTheme: GoogleFonts.interTextTheme(
+          ThemeData.dark().textTheme,
+        ),
+      ),
+      routerConfig: router,
+        );
+      },
     );
   }
 }

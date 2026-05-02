@@ -64,21 +64,20 @@ class _EditQrScreenState extends State<EditQrScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text('Edit Dynamic QR'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Container(
           padding: const EdgeInsets.all(24.0),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
           ),
           child: Form(
             key: _formKey,

@@ -6,6 +6,7 @@ import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
 import '../core/constants.dart';
+import '../core/notification_service.dart';
 
 class QrListItemWidget extends StatefulWidget {
   final Map<String, dynamic> qr;
@@ -26,46 +27,65 @@ class QrListItemWidget extends StatefulWidget {
 class _QrListItemWidgetState extends State<QrListItemWidget> {
   final ScreenshotController _screenshotController = ScreenshotController();
   String _selectedTheme = 'Classic';
+  Color _selectedColor = Colors.black;
+  Color _selectedEyeColor = Colors.black;
 
   final List<String> _themes = ['Classic', 'Rounded', 'Thin', 'Smooth', 'Circles'];
+  final Map<String, Color> _colors = {
+    'Black': Colors.black,
+    'Indigo': Colors.indigo,
+    'Emerald': Colors.green,
+    'Rose': Colors.pink,
+    'Amber': Colors.amber,
+  };
 
   QrDataModuleStyle _getModuleStyle() {
     switch (_selectedTheme) {
       case 'Rounded':
-        return const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: Colors.black);
+        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: _selectedColor);
       case 'Thin':
-        return const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black); // thin requires custom paint or smaller size but square is fallback
+        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: _selectedColor);
       case 'Smooth':
-        return const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: Colors.black);
+        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: _selectedColor);
       case 'Circles':
-        return const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: Colors.black);
+        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: _selectedColor);
       case 'Classic':
       default:
-        return const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black);
+        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: _selectedColor);
     }
   }
 
   QrEyeStyle _getEyeStyle() {
     switch (_selectedTheme) {
       case 'Rounded':
-        return const QrEyeStyle(eyeShape: QrEyeShape.circle, color: Colors.black);
+        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: _selectedEyeColor);
       case 'Smooth':
-        return const QrEyeStyle(eyeShape: QrEyeShape.circle, color: Colors.black);
+        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: _selectedEyeColor);
       case 'Circles':
-        return const QrEyeStyle(eyeShape: QrEyeShape.circle, color: Colors.black);
+        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: _selectedEyeColor);
       case 'Classic':
       case 'Thin':
       default:
-        return const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black);
+        return QrEyeStyle(eyeShape: QrEyeShape.square, color: _selectedEyeColor);
     }
   }
 
   Future<void> _downloadQr() async {
     try {
-      final Uint8List? image = await _screenshotController.capture();
-      if (image != null) {
+      final shortUrl = 'https://dynamqr.vercel.app/${widget.qr['short_code']}';
+      final painter = QrPainter(
+        data: shortUrl,
+        version: QrVersions.auto,
+        eyeStyle: _getEyeStyle(),
+        dataModuleStyle: _getModuleStyle(),
+        color: _selectedColor,
+        emptyColor: Colors.white,
+      );
+      
+      final picData = await painter.toImageData(2048);
+      if (picData != null) {
         final result = await ImageGallerySaverPlus.saveImage(
-          image,
+          picData.buffer.asUint8List(),
           quality: 100,
           name: "QR_${widget.qr['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
         );
@@ -75,6 +95,10 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
               const SnackBar(content: Text('QR Code saved to gallery!'), backgroundColor: Colors.green),
             );
           }
+          await NotificationService().showNotification(
+            title: 'QR Code Saved',
+            body: 'Successfully saved QR code for ${widget.qr['destination_url']} to your gallery.',
+          );
         } else {
           throw Exception('Failed to save');
         }
@@ -91,14 +115,15 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
   @override
   Widget build(BuildContext context) {
     final shortUrl = 'https://dynamqr.vercel.app/${widget.qr['short_code']}';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -109,20 +134,34 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
               children: [
                 Screenshot(
                   controller: _screenshotController,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade200),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: QrImageView(
-                      data: shortUrl,
-                      version: QrVersions.auto,
-                      size: 100.0,
-                      backgroundColor: Colors.white,
-                      eyeStyle: _getEyeStyle(),
-                      dataModuleStyle: _getModuleStyle(),
+                  child: GestureDetector(
+                    onTap: () {
+                      context.push('/qr_fullscreen', extra: {
+                        'qrData': widget.qr,
+                        'shortUrl': shortUrl,
+                        'selectedTheme': _selectedTheme,
+                        'selectedColor': _selectedColor,
+                        'selectedEyeColor': _selectedEyeColor,
+                      });
+                    },
+                    child: Hero(
+                      tag: 'qr-${widget.qr['id']}',
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: QrImageView(
+                          data: shortUrl,
+                          version: QrVersions.auto,
+                          size: 100.0,
+                          backgroundColor: Colors.white,
+                          eyeStyle: _getEyeStyle(),
+                          dataModuleStyle: _getModuleStyle(),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -227,10 +266,114 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                 });
                               }
                             },
-                            selectedColor: Colors.indigo.shade100,
+                            selectedColor: isDark ? Colors.indigo.shade900 : Colors.indigo.shade100,
+                            backgroundColor: isDark ? Colors.grey.shade900 : Colors.white,
                             labelStyle: TextStyle(
-                              color: isSelected ? Colors.indigo.shade900 : Colors.black87,
+                              color: isSelected 
+                                ? (isDark ? Colors.white : Colors.indigo.shade900)
+                                : (isDark ? Colors.grey.shade300 : Colors.black87),
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('Color:  ', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _colors.entries.map((entry) {
+                        final colorName = entry.key;
+                        final colorValue = entry.value;
+                        final isSelected = _selectedColor == colorValue;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedColor = colorValue;
+                                // If they were the same, keep them linked unless manually changed
+                                if (_selectedEyeColor == _selectedColor) {
+                                  _selectedEyeColor = colorValue;
+                                }
+                              });
+                            },
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: colorValue,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected ? Colors.indigo : Colors.transparent,
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  if (isSelected)
+                                    BoxShadow(
+                                      color: colorValue.withOpacity(0.4),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    )
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('Eye Color:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _colors.entries.map((entry) {
+                        final colorValue = entry.value;
+                        final isSelected = _selectedEyeColor == colorValue;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedEyeColor = colorValue;
+                              });
+                            },
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: colorValue,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected ? Colors.indigo : Colors.transparent,
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  if (isSelected)
+                                    BoxShadow(
+                                      color: colorValue.withOpacity(0.4),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    )
+                                ],
+                              ),
                             ),
                           ),
                         );

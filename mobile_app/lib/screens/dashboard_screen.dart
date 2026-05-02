@@ -7,6 +7,13 @@ import 'package:share_plus/share_plus.dart';
 import '../core/constants.dart';
 import '../widgets/qr_list_item.dart';
 import 'scanner_screen.dart';
+import 'create_qr_screen.dart';
+import 'about_screen.dart';
+import 'privacy_policy_screen.dart';
+import 'terms_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
+import '../services/update_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,13 +31,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _fetchQRCodes();
+    
+    // Check for updates shortly after screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UpdateService().checkForUpdates(context);
+    });
   }
 
   Future<void> _fetchQRCodes() async {
     try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      
       final data = await _supabase
           .from('qr_codes')
           .select()
+          .eq('user_id', user.id)
           .order('created_at', ascending: false);
       if (mounted) {
         setState(() {
@@ -66,38 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('About the Developer'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('DynamQR is built by Mojahid Hassan, a passionate indie developer focused on creating simple, powerful tools for the digital world. The goal behind this app is to make QR technology smarter, more flexible, and accessible for everyone — from small business owners to creators and developers.\n\nWith DynamQR, the idea is straightforward: your QR code should never be static. You should have full control to update, manage, and optimize your links anytime without reprinting or regenerating codes.\n\nThis project is part of a larger vision to build lightweight, user-friendly web tools that solve real problems without unnecessary complexity or heavy systems.\n\nBuilt with ❤️ for simplicity, speed, and freedom.\n\nFor feedback, suggestions, or collaboration:'),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: () {
-                    launchUrl(Uri.parse('mailto:hello@mojahidhassan.in'));
-                  },
-                  child: const Text('hello@mojahidhassan.in', style: TextStyle(color: Colors.indigo, decoration: TextDecoration.underline)),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // Removed _showAboutDialog as we now use AboutScreen
 
   Widget _buildDrawer() {
     return Drawer(
@@ -137,7 +122,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             title: const Text('About Developer'),
             onTap: () {
               Navigator.pop(context);
-              _showAboutDialog();
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const AboutScreen()));
             },
           ),
           ListTile(
@@ -163,6 +148,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Privacy Policy'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.description_outlined),
+            title: const Text('Terms of Service'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsScreen()));
+            },
+          ),
+          const Divider(),
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, child) {
+              return ListTile(
+                leading: Icon(
+                  themeProvider.themeMode == ThemeMode.dark ? Icons.dark_mode :
+                  themeProvider.themeMode == ThemeMode.light ? Icons.light_mode : Icons.brightness_auto,
+                ),
+                title: const Text('Theme'),
+                subtitle: Text(
+                  themeProvider.themeMode == ThemeMode.dark ? 'Dark Mode' :
+                  themeProvider.themeMode == ThemeMode.light ? 'Light Mode' : 'System Default',
+                ),
+                trailing: PopupMenuButton<ThemeMode>(
+                  onSelected: (mode) => themeProvider.setTheme(mode),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: ThemeMode.system, child: Text('System Default')),
+                    PopupMenuItem(value: ThemeMode.light, child: Text('Light Mode')),
+                    PopupMenuItem(value: ThemeMode.dark, child: Text('Dark Mode')),
+                  ],
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text('Log Out', style: TextStyle(color: Colors.red)),
             onTap: () {
@@ -177,12 +203,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text('DynamQR', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -210,14 +235,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
             icon: const Icon(Icons.qr_code_scanner),
             label: const Text('Scan QR'),
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.indigo,
+            backgroundColor: isDark ? Colors.grey.shade900 : Colors.white,
+            foregroundColor: isDark ? Colors.indigo.shade200 : Colors.indigo,
           ),
           const SizedBox(height: 16),
           FloatingActionButton.extended(
             heroTag: 'create_qr',
             onPressed: () async {
-              final result = await context.push('/create');
+              final result = await showModalBottomSheet<bool>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => const CreateQrScreen(),
+              );
               if (result == true) {
                 _fetchQRCodes();
               }

@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CreateQR from './pages/CreateQR';
+import Admin from './pages/Admin';
 import Redirect from './pages/Redirect';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
@@ -31,6 +32,11 @@ function App() {
             <Route path="/create" element={
               <PrivateRoute>
                 <CreateQR />
+              </PrivateRoute>
+            } />
+            <Route path="/admin" element={
+              <PrivateRoute>
+                <Admin />
               </PrivateRoute>
             } />
             <Route path="/:shortCode" element={<Redirect />} />

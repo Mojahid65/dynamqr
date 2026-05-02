@@ -13,9 +13,13 @@ const CreateQR = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Generate a random 6-character short code
+  // Generate a random short code like moja123
   const generateShortCode = () => {
-    return Math.random().toString(36).substring(2, 8);
+    return 'moja' + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  };
+
+  const generateRandomKeyword = () => {
+    setKeyword('moja' + Math.floor(Math.random() * 1000).toString().padStart(3, '0'));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -114,7 +118,7 @@ const CreateQR = () => {
                   <label className="text-sm font-semibold text-slate-700">
                     Custom Keyword <span className="text-indigo-500 text-xs font-medium ml-2 px-2 py-0.5 bg-indigo-50 rounded-full">Premium Feature Preview</span>
                   </label>
-                  <div className="relative">
+                  <div className="relative flex items-center">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <Hash className="h-5 w-5 text-slate-400" />
                     </div>
@@ -122,9 +126,16 @@ const CreateQR = () => {
                       type="text"
                       value={keyword}
                       onChange={(e) => setKeyword(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-slate-900 transition-all"
+                      className="w-full pl-10 pr-24 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-slate-900 transition-all"
                       placeholder="e.g., my-portfolio"
                     />
+                    <button
+                      type="button"
+                      onClick={generateRandomKeyword}
+                      className="absolute right-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg hover:bg-indigo-200 transition-colors"
+                    >
+                      Random
+                    </button>
                   </div>
                   <p className="text-xs text-slate-500">Make your short link memorable (only lowercase letters, numbers, and hyphens).</p>
                 </div>

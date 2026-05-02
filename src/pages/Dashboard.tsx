@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
-import { Plus, QrCode, LogOut, ExternalLink, Download, Edit, Trash2 } from 'lucide-react';
+import { Plus, QrCode, LogOut, ExternalLink, Download, Edit, Trash2, ShieldAlert } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 type QRCodeData = {
@@ -76,13 +76,23 @@ const Dashboard = () => {
             <h1 className="text-2xl font-bold text-slate-900">Your QR Codes</h1>
             <p className="text-slate-500 text-sm mt-1">Manage and track your dynamic links</p>
           </div>
-          <Link 
-            to="/create" 
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all shadow-md shadow-indigo-200 active:scale-95"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create QR Code</span>
-          </Link>
+          <div className="flex space-x-3">
+            <Link 
+              to="/admin" 
+              className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all border border-red-200 active:scale-95"
+            >
+              <ShieldAlert className="w-5 h-5" />
+              <span className="hidden sm:inline">Admin</span>
+            </Link>
+            <Link 
+              to="/create" 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all shadow-md shadow-indigo-200 active:scale-95"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="hidden sm:inline">Create QR Code</span>
+              <span className="sm:hidden">Create</span>
+            </Link>
+          </div>
         </div>
 
         {loading ? (

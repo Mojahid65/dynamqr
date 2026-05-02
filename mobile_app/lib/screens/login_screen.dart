@@ -13,14 +13,22 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isLogin = true;
 
-  Future<void> _signIn() async {
+  Future<void> _submit() async {
     setState(() => _isLoading = true);
     try {
-      await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      if (_isLogin) {
+        await Supabase.instance.client.auth.signInWithPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+      } else {
+        await Supabase.instance.client.auth.signUp(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+      }
       if (mounted) context.go('/');
     } on AuthException catch (e) {
       if (mounted) {
@@ -48,27 +56,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: Colors.indigo.shade900,
+      backgroundColor: isDark ? Colors.black : Colors.indigo.shade900,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Container(
             padding: const EdgeInsets.all(32.0),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF121212) : Colors.white,
               borderRadius: BorderRadius.circular(24.0),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.qr_code_2, size: 64, color: Colors.indigo),
+                Icon(Icons.qr_code_2, size: 64, color: isDark ? Colors.indigo.shade200 : Colors.indigo),
                 const SizedBox(height: 16),
-                const Text(
-                  'Welcome Back',
+                Text(
+                  _isLogin ? 'Welcome Back' : 'Create Account',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 32),
                 TextField(
@@ -96,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _signIn,
+                  onPressed: _isLoading ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo,
                     foregroundColor: Colors.white,
@@ -107,7 +117,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: _isLoading 
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Sign In', style: TextStyle(fontSize: 16)),
+                      : Text(_isLogin ? 'Sign In' : 'Sign Up', style: const TextStyle(fontSize: 16)),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLogin = !_isLogin;
+                    });
+                  },
+                  child: Text(
+                    _isLogin ? 'Create new account' : 'Already have an account? Sign In',
+                    style: TextStyle(color: isDark ? Colors.indigo.shade200 : Colors.indigo.shade700),
+                  ),
                 ),
               ],
             ),
