@@ -225,7 +225,7 @@ const Admin = () => {
 
               try {
                 // Call Supabase Edge Function
-                const { data, error } = await supabase.functions.invoke('send_push_notification', {
+                const { error } = await supabase.functions.invoke('send_push_notification', {
                   body: { title, body, imageUrl }
                 });
 
