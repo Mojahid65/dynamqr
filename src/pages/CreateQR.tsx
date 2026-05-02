@@ -2,24 +2,19 @@ import { useState } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Link as LinkIcon, Hash, Save, Check, Plus } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, Save, Check } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 const CreateQR = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [url, setUrl] = useState('');
-  const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Generate a random short code like moja123
+  // Generate a random short code like moja + 6 alphanumeric characters
   const generateShortCode = () => {
-    return 'moja' + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  };
-
-  const generateRandomKeyword = () => {
-    setKeyword('moja' + Math.floor(Math.random() * 1000).toString().padStart(3, '0'));
+    return 'moja' + Math.random().toString(36).substring(2, 8);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,25 +36,20 @@ const CreateQR = () => {
       user_id: user.id,
       destination_url: finalUrl,
       short_code: shortCode,
-      keyword: keyword.trim() || null,
       design_config: {}
     });
 
     setLoading(false);
 
     if (insertError) {
-      if (insertError.code === '23505' && insertError.message.includes('keyword')) {
-        setError('This keyword is already taken. Please choose another one.');
-      } else {
-        setError(insertError.message);
-      }
+      setError(insertError.message);
     } else {
       navigate('/');
     }
   };
 
   // Preview short URL
-  const previewShortUrl = `https://dynamqr.vercel.app/${keyword || 'YOUR_CODE'}`;
+  const previewShortUrl = `https://dynamqr.vercel.app/YOUR_CODE`;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -113,48 +103,7 @@ const CreateQR = () => {
                   <p className="text-xs text-slate-500">The link where your QR code will redirect to.</p>
                 </div>
 
-                {/* Custom Keyword */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">
-                    Custom Keyword <span className="text-indigo-500 text-xs font-medium ml-2 px-2 py-0.5 bg-indigo-50 rounded-full">Premium Feature Preview</span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Hash className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <input
-                      type="text"
-                      value={keyword}
-                      onChange={(e) => setKeyword(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                      className="w-full pl-10 pr-24 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-slate-900 transition-all"
-                      placeholder="e.g., my-portfolio"
-                    />
-                    <button
-                      type="button"
-                      onClick={generateRandomKeyword}
-                      className="absolute right-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg hover:bg-indigo-200 transition-colors"
-                    >
-                      Random
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500">Make your short link memorable (only lowercase letters, numbers, and hyphens).</p>
-                </div>
 
-                {/* Presets (Placeholder UI) */}
-                <div className="pt-4 border-t border-slate-100">
-                  <label className="text-sm font-semibold text-slate-700 mb-3 block">Or use a preset</label>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:border-slate-300 transition-colors">
-                      📸 Instagram
-                    </button>
-                    <button type="button" className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:border-slate-300 transition-colors">
-                      💸 UPI Payment
-                    </button>
-                    <button type="button" className="px-4 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors flex items-center">
-                      <Plus className="w-4 h-4 mr-1" /> Add Preset
-                    </button>
-                  </div>
-                </div>
 
                 <div className="pt-6">
                   <button
@@ -194,7 +143,7 @@ const CreateQR = () => {
               <div className="w-full bg-slate-50 rounded-xl p-3 border border-slate-100">
                 <p className="text-xs text-slate-400 mb-1">Your short link will be:</p>
                 <p className="text-sm font-mono text-indigo-600 break-all">
-                  domain.com/{keyword || 'short_code'}
+                  domain.com/YOUR_CODE
                 </p>
               </div>
 

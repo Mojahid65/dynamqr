@@ -20,9 +20,11 @@ const Dashboard = () => {
 
   const fetchQRCodes = async () => {
     setLoading(true);
+    if (!user) return;
     const { data } = await supabase
       .from('qr_codes')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     
     if (data) {
@@ -32,8 +34,10 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    fetchQRCodes();
-  }, []);
+    if (user) {
+      fetchQRCodes();
+    }
+  }, [user]);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this QR code?')) return;
@@ -140,7 +144,7 @@ const Dashboard = () => {
                         {qr.destination_url}
                       </h3>
                       <div className="flex items-center space-x-1 mt-1 text-xs text-indigo-600 font-medium bg-indigo-50 px-2 py-1 rounded-md w-fit">
-                        <span className="truncate max-w-[120px]">/{qr.keyword || qr.short_code}</span>
+                        <span className="truncate max-w-[120px]">/{qr.short_code}</span>
                       </div>
                       <p className="text-xs text-slate-400 mt-2">
                         {new Date(qr.created_at).toLocaleDateString()}

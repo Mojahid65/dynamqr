@@ -14,9 +14,42 @@ import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/notification_service.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint("Handling a background message: ${message.messageId}");
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  await Firebase.initializeApp(
+    options: const FirebaseOptions(
+      apiKey: 'AIzaSyCTodm0VtHRYePLVVX_fWENZv5ZN52K-DM',
+      appId: '1:715971039552:android:8e17ce22e292cc6b46eaa5',
+      messagingSenderId: '715971039552',
+      projectId: 'dynamqr',
+      storageBucket: 'dynamqr.firebasestorage.app',
+    ),
+  );
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    announcement: false,
+    badge: true,
+    carPlay: false,
+    criticalAlert: false,
+    provisional: false,
+    sound: true,
+  );
+
+  await FirebaseMessaging.instance.subscribeToTopic('announcements');
+
   await NotificationService().init();
   
   await Supabase.initialize(

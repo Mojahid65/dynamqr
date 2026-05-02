@@ -205,8 +205,80 @@ const Admin = () => {
         </div>
 
         {/* History Section */}
-        <div className="flex-1">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-full">
+        <div className="flex-1 flex flex-col gap-8">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center">
+              <ShieldAlert className="w-5 h-5 mr-2 text-indigo-500" /> Send Push Notification
+            </h2>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const title = formData.get('title') as string;
+              const body = formData.get('body') as string;
+              const imageUrl = formData.get('imageUrl') as string;
+              
+              if (!title || !body) {
+                alert('Title and body are required.');
+                return;
+              }
+
+              try {
+                // Call Supabase Edge Function
+                const { data, error } = await supabase.functions.invoke('send_push_notification', {
+                  body: { title, body, imageUrl }
+                });
+
+                if (error) throw error;
+                alert('Push notification sent successfully!');
+                (e.target as HTMLFormElement).reset();
+              } catch (err: any) {
+                console.error(err);
+                alert('Failed to send notification: ' + err.message);
+              }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Notification Title</label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  placeholder="e.g. New Feature Alert!"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Message Body</label>
+                <textarea
+                  name="body"
+                  required
+                  placeholder="Tell your users what's new..."
+                  rows={3}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Image URL (Optional)</label>
+                <input
+                  type="url"
+                  name="imageUrl"
+                  placeholder="https://... (For rich notifications)"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 rounded-xl shadow-md transition-all mt-4"
+              >
+                Broadcast Notification
+              </button>
+            </form>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex-1 overflow-auto">
             <h2 className="text-lg font-bold text-slate-900 mb-6">Update History</h2>
             
             {loading ? (
