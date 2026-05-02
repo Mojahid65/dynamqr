@@ -17,21 +17,13 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const PublicOnly = ({ children }: { children: React.ReactNode }) => {
-  const { session } = useAuth();
-  if (session) {
-    return <Navigate to="/" />;
-  }
-  return <>{children}</>;
-};
-
 function App() {
   return (
     <AuthProvider>
       <Router>
         <div className="min-h-screen bg-background font-sans antialiased text-foreground">
           <Routes>
-            <Route path="/landing" element={<PublicOnly><Landing /></PublicOnly>} />
+            <Route path="/landing" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/" element={
