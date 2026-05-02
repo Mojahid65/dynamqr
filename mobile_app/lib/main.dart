@@ -57,6 +57,63 @@ Future<void> main() async {
     anonKey: supabaseAnonKey,
   );
 
+  bool isBanned = false;
+  try {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      final profile = await Supabase.instance.client.from('profiles').select('is_banned').eq('id', session.user.id).maybeSingle();
+      if (profile != null && profile['is_banned'] == true) {
+        isBanned = true;
+        await Supabase.instance.client.auth.signOut();
+      }
+    }
+  } catch (e) {
+    debugPrint('Failed to check ban status: $e');
+  }
+
+  bool maintenanceMode = false;
+  try {
+    final settingsResponse = await Supabase.instance.client.from('app_settings').select('maintenance_mode').eq('id', 1).maybeSingle();
+    if (settingsResponse != null) {
+      maintenanceMode = settingsResponse['maintenance_mode'] as bool? ?? false;
+    }
+  } catch (e) {
+    debugPrint('Failed to load settings: $e');
+  }
+
+  if (maintenanceMode) {
+    runApp(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData.light(useMaterial3: true),
+        darkTheme: ThemeData.dark(useMaterial3: true),
+        themeMode: ThemeMode.system,
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.engineering, size: 80, color: Colors.indigo),
+                SizedBox(height: 24),
+                Text('Under Maintenance', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                SizedBox(height: 16),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Text(
+                    'We are currently performing scheduled maintenance to improve your experience. Please check back later.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+
   final prefs = await SharedPreferences.getInstance();
   final hasCompletedOnboarding = prefs.getBool('has_completed_onboarding') ?? false;
 

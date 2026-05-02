@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { supabase } from '../lib/supabase';
-import { LogOut, ArrowLeft, Plus, Check, X, ShieldAlert } from 'lucide-react';
+import { LogOut, ArrowLeft, Plus, Check, X, ShieldAlert, Settings, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type AppUpdate = {
@@ -14,12 +14,24 @@ type AppUpdate = {
   created_at: string;
 };
 
+type Profile = {
+  id: string;
+  email: string;
+  device_name: string | null;
+  android_version: string | null;
+  is_banned: boolean;
+  created_at: string;
+};
+
 const Admin = () => {
   const { user, signOut } = useAuth();
   const [updates, setUpdates] = useState<AppUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
 
   // Form State
   const [versionCode, setVersionCode] = useState('');
@@ -28,22 +40,40 @@ const Admin = () => {
   const [releaseNotes, setReleaseNotes] = useState('');
   const [isMandatory, setIsMandatory] = useState(false);
 
-  const fetchUpdates = async () => {
+  const fetchData = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    
+    // Fetch Updates
+    const { data: updatesData, error: updatesError } = await supabase
       .from('app_updates')
       .select('*')
       .order('version_code', { ascending: false });
 
-    if (error) {
-      if (error.code === '42P01') {
+    if (updatesError) {
+      if (updatesError.code === '42P01') {
         setError("The 'app_updates' table does not exist. Please run the SQL script in your Supabase dashboard.");
       } else {
-        console.error('Error fetching updates:', error);
+        console.error('Error fetching updates:', updatesError);
       }
-    } else if (data) {
-      setUpdates(data);
+    } else if (updatesData) {
+      setUpdates(updatesData);
     }
+
+    // Fetch Profiles
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (profilesData) setProfiles(profilesData);
+
+    // Fetch Settings
+    const { data: settingsData } = await supabase
+      .from('app_settings')
+      .select('maintenance_mode')
+      .eq('id', 1)
+      .single();
+    if (settingsData) setMaintenanceMode(settingsData.maintenance_mode);
+
     setLoading(false);
   };
 
@@ -51,9 +81,38 @@ const Admin = () => {
 
   useEffect(() => {
     if (isAdmin) {
-      fetchUpdates();
+      fetchData();
     }
   }, [isAdmin]);
+
+  const toggleMaintenanceMode = async () => {
+    const newVal = !maintenanceMode;
+    const { error } = await supabase
+      .from('app_settings')
+      .update({ maintenance_mode: newVal })
+      .eq('id', 1);
+    
+    if (!error) {
+      setMaintenanceMode(newVal);
+      // Optional: alert('Maintenance Mode updated');
+    } else {
+      alert('Failed to update maintenance mode: ' + error.message);
+    }
+  };
+
+  const toggleBan = async (userId: string, currentStatus: boolean) => {
+    const newVal = !currentStatus;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_banned: newVal })
+      .eq('id', userId);
+
+    if (!error) {
+      setProfiles(profiles.map(p => p.id === userId ? { ...p, is_banned: newVal } : p));
+    } else {
+      alert('Failed to update user status: ' + error.message);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +141,7 @@ const Admin = () => {
       setUpdateUrl('');
       setReleaseNotes('');
       setIsMandatory(false);
-      fetchUpdates();
+      fetchData();
       alert('Update published successfully!');
     }
     setIsSubmitting(false);
@@ -142,10 +201,30 @@ const Admin = () => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8">
         
-        {/* Form Section */}
-        <div className="flex-1">
+        {/* Top Controls: Maintenance Mode */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+             <div className="bg-orange-100 p-2 rounded-lg">
+               <Settings className="w-6 h-6 text-orange-600" />
+             </div>
+             <div>
+               <h2 className="text-lg font-bold text-slate-900">Global Maintenance Mode</h2>
+               <p className="text-sm text-slate-500">When enabled, users will be blocked from accessing the mobile app.</p>
+             </div>
+          </div>
+          <button 
+             onClick={toggleMaintenanceMode}
+             className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${maintenanceMode ? 'bg-red-500' : 'bg-slate-300'}`}
+          >
+             <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${maintenanceMode ? 'translate-x-7' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Form Section */}
+          <div className="flex-1">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center">
               <Plus className="w-5 h-5 mr-2 text-indigo-500" /> Push New Update
@@ -350,6 +429,48 @@ const Admin = () => {
                 ))}
               </div>
             )}
+          </div>
+          </div>
+        </div>
+
+        {/* User Management Table */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center">
+            <Users className="w-5 h-5 mr-2 text-indigo-500" /> User Management
+          </h2>
+          <div className="overflow-x-auto">
+             <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-sm text-slate-500">
+                    <th className="pb-3 font-medium">Email</th>
+                    <th className="pb-3 font-medium">Device Name</th>
+                    <th className="pb-3 font-medium">Android Version</th>
+                    <th className="pb-3 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {profiles.map(p => (
+                     <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                       <td className="py-4 font-medium text-slate-900">{p.email}</td>
+                       <td className="py-4 text-slate-600">{p.device_name || 'Unknown'}</td>
+                       <td className="py-4 text-slate-600">{p.android_version ? `Android ${p.android_version}` : 'Unknown'}</td>
+                       <td className="py-4 text-right">
+                         <button 
+                            onClick={() => toggleBan(p.id, p.is_banned)}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${p.is_banned ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100'}`}
+                         >
+                            {p.is_banned ? 'Unban' : 'Ban User'}
+                         </button>
+                       </td>
+                     </tr>
+                  ))}
+                  {profiles.length === 0 && !loading && (
+                     <tr>
+                       <td colSpan={4} className="py-8 text-center text-slate-500">No users found.</td>
+                     </tr>
+                  )}
+                </tbody>
+             </table>
           </div>
         </div>
 

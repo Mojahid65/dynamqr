@@ -1,7 +1,8 @@
+import 'dart:io' show Platform;
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -104,6 +105,51 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
+        
+        // Update device info
+        try {
+          final deviceInfo = DeviceInfoPlugin();
+          String deviceName = 'Unknown';
+          String androidVersion = 'Unknown';
+          
+          if (Platform.isAndroid) {
+            final androidInfo = await deviceInfo.androidInfo;
+            deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
+            androidVersion = androidInfo.version.release;
+          } else if (Platform.isIOS) {
+            final iosInfo = await deviceInfo.iosInfo;
+            deviceName = iosInfo.name;
+            androidVersion = iosInfo.systemVersion;
+          }
+          
+          final userId = Supabase.instance.client.auth.currentUser!.id;
+          
+          // Check if banned first
+          final profile = await Supabase.instance.client.from('profiles').select('is_banned').eq('id', userId).maybeSingle();
+          if (profile != null && profile['is_banned'] == true) {
+             await Supabase.instance.client.auth.signOut();
+             setState(() => _isLoading = false);
+             if (mounted) {
+               showDialog(
+                 context: context,
+                 builder: (ctx) => AlertDialog(
+                   title: const Text('Account Suspended'),
+                   content: const Text('Your account has been suspended by the administrator. Please contact support.'),
+                   actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+                 )
+               );
+             }
+             return;
+          }
+
+          await Supabase.instance.client.from('profiles').update({
+            'device_name': deviceName,
+            'android_version': androidVersion,
+          }).eq('id', userId);
+        } catch (e) {
+          debugPrint('Failed to update device info: $e');
+        }
+
         if (mounted) context.go('/');
       } else {
         final email = _emailController.text.trim();
