@@ -15,6 +15,87 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isLogin = true;
 
+  Future<void> _showVerificationDialog(String email) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.mark_email_unread_outlined, color: Colors.indigo, size: 28),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Verify Your Email')),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'We sent a verification link to:\n$email',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                const Text('Follow these steps to complete registration:'),
+                const SizedBox(height: 12),
+                _buildStep(1, 'Open your email app'),
+                _buildStep(2, 'Find the email from DynamQR'),
+                _buildStep(3, 'Click the "Verify Email" link inside'),
+                _buildStep(4, 'Return here and log in'),
+                const SizedBox(height: 16),
+                const Text(
+                  'Note: Check your spam folder if you don\'t see it within a few minutes.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('I Understand', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() => _isLogin = true); // Switch back to login view
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStep(int number, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: Colors.indigo.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                number.toString(),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.indigo),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: const TextStyle(height: 1.4))),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     setState(() => _isLoading = true);
     try {
@@ -23,13 +104,19 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
+        if (mounted) context.go('/');
       } else {
+        final email = _emailController.text.trim();
         await Supabase.instance.client.auth.signUp(
-          email: _emailController.text.trim(),
+          email: email,
           password: _passwordController.text.trim(),
         );
+        if (mounted) {
+          // Hide loading before showing dialog
+          setState(() => _isLoading = false);
+          await _showVerificationDialog(email);
+        }
       }
-      if (mounted) context.go('/');
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -43,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && _isLoading) setState(() => _isLoading = false);
     }
   }
 
