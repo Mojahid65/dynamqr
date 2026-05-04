@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.dynamqr.mojahidx.in",
+      "sha256_cert_fingerprints": [
+        "16:84:4D:BC:6B:E2:EC:D0:2E:9B:79:D1:70:75:60:4E:AB:EE:64:21:C8:14:34:40:80:0C:29:C1:58:C5:C4:47",
+        "61:48:FC:2C:F3:1F:88:52:FE:EF:B7:F3:F2:E3:48:90:41:D3:1E:27:64:F6:2F:76:16:96:99:6E:EA:A8:42:A4"
+      ]
+    }
+  }
+]

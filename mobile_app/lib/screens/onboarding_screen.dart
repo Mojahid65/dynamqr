@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  final VoidCallback? onCompleted;
+
+  const OnboardingScreen({super.key, this.onCompleted});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -16,19 +18,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<Map<String, dynamic>> _onboardingData = [
     {
       'title': 'Dynamic QR Codes',
-      'description': 'Create QR codes that can be updated anytime without reprinting.',
+      'description':
+          'Create QR codes that can be updated anytime without reprinting.',
       'icon': Icons.qr_code_scanner,
       'color': Colors.indigo,
     },
     {
       'title': 'Advanced Customization',
-      'description': 'Customize themes, colors, and shapes to match your brand.',
+      'description':
+          'Customize themes, colors, and shapes to match your brand.',
       'icon': Icons.color_lens,
       'color': Colors.pink,
     },
     {
       'title': 'High Quality Export',
-      'description': 'Download and export your QR codes in ultra-high resolution for professional printing.',
+      'description':
+          'Download and export your QR codes in ultra-high resolution for professional printing.',
       'icon': Icons.high_quality,
       'color': Colors.amber,
     },
@@ -37,15 +42,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('has_completed_onboarding', true);
+    widget.onCompleted?.call();
     if (mounted) {
       context.go('/login');
     }
   }
 
   @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
       // Use AMOLED black if dark mode
       backgroundColor: isDark ? Colors.black : Colors.white,
@@ -96,7 +108,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 16,
-                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
                             height: 1.5,
                           ),
                         ),
@@ -121,7 +135,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         decoration: BoxDecoration(
                           color: _currentPage == index
                               ? _onboardingData[_currentPage]['color']
-                              : (isDark ? Colors.grey.shade800 : Colors.grey.shade300),
+                              : (isDark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade300),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -141,14 +157,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _onboardingData[_currentPage]['color'],
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
                     ),
                     child: Text(
-                      _currentPage == _onboardingData.length - 1 ? 'Get Started' : 'Next',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      _currentPage == _onboardingData.length - 1
+                          ? 'Get Started'
+                          : 'Next',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],

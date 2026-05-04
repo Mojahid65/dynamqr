@@ -9,7 +9,9 @@ import 'screens/dashboard_screen.dart';
 import 'screens/create_qr_screen.dart';
 import 'screens/edit_qr_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/permissions_screen.dart';
 import 'screens/qr_fullscreen_screen.dart';
+import 'screens/auth_callback_screen.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/notification_service.dart';
@@ -25,7 +27,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   await Firebase.initializeApp(
     options: const FirebaseOptions(
       apiKey: 'AIzaSyCTodm0VtHRYePLVVX_fWENZv5ZN52K-DM',
@@ -38,30 +40,19 @@ Future<void> main() async {
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    announcement: false,
-    badge: true,
-    carPlay: false,
-    criticalAlert: false,
-    provisional: false,
-    sound: true,
-  );
-
-  await FirebaseMessaging.instance.subscribeToTopic('announcements');
-
   await NotificationService().init();
-  
-  await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
-  );
+
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   bool isBanned = false;
   try {
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
-      final profile = await Supabase.instance.client.from('profiles').select('is_banned').eq('id', session.user.id).maybeSingle();
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('is_banned')
+          .eq('id', session.user.id)
+          .maybeSingle();
       if (profile != null && profile['is_banned'] == true) {
         isBanned = true;
         await Supabase.instance.client.auth.signOut();
@@ -73,7 +64,11 @@ Future<void> main() async {
 
   bool maintenanceMode = false;
   try {
-    final settingsResponse = await Supabase.instance.client.from('app_settings').select('maintenance_mode').eq('id', 1).maybeSingle();
+    final settingsResponse = await Supabase.instance.client
+        .from('app_settings')
+        .select('maintenance_mode')
+        .eq('id', 1)
+        .maybeSingle();
     if (settingsResponse != null) {
       maintenanceMode = settingsResponse['maintenance_mode'] as bool? ?? false;
     }
@@ -95,7 +90,10 @@ Future<void> main() async {
               children: const [
                 Icon(Icons.engineering, size: 80, color: Colors.indigo),
                 SizedBox(height: 24),
-                Text('Under Maintenance', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(
+                  'Under Maintenance',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
                 SizedBox(height: 16),
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 32.0),
@@ -115,39 +113,93 @@ Future<void> main() async {
   }
 
   final prefs = await SharedPreferences.getInstance();
-  final hasCompletedOnboarding = prefs.getBool('has_completed_onboarding') ?? false;
+  final hasCompletedOnboarding =
+      prefs.getBool('has_completed_onboarding') ?? false;
+  final hasCompletedPermissions =
+      prefs.getBool('has_completed_permissions') ?? false;
 
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),
-      child: MyApp(hasCompletedOnboarding: hasCompletedOnboarding),
+      child: MyApp(
+        initialHasCompletedOnboarding: hasCompletedOnboarding,
+        initialHasCompletedPermissions: hasCompletedPermissions,
+      ),
     ),
   );
 }
 
-class MyApp extends StatelessWidget {
-  final bool hasCompletedOnboarding;
+class MyApp extends StatefulWidget {
+  final bool initialHasCompletedOnboarding;
+  final bool initialHasCompletedPermissions;
 
-  const MyApp({super.key, required this.hasCompletedOnboarding});
+  const MyApp({
+    super.key,
+    required this.initialHasCompletedOnboarding,
+    required this.initialHasCompletedPermissions,
+  });
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late bool _hasCompletedOnboarding;
+  late bool _hasCompletedPermissions;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasCompletedOnboarding = widget.initialHasCompletedOnboarding;
+    _hasCompletedPermissions = widget.initialHasCompletedPermissions;
+  }
+
+  void _handleOnboardingCompleted() {
+    if (_hasCompletedOnboarding) return;
+    setState(() {
+      _hasCompletedOnboarding = true;
+    });
+  }
+
+  void _handlePermissionsCompleted() {
+    if (_hasCompletedPermissions) return;
+    setState(() {
+      _hasCompletedPermissions = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final router = GoRouter(
-      initialLocation: hasCompletedOnboarding ? '/' : '/onboarding',
+      initialLocation: _hasCompletedOnboarding ? '/' : '/onboarding',
       redirect: (context, state) {
         final session = Supabase.instance.client.auth.currentSession;
         final isGoingToLogin = state.matchedLocation == '/login';
         final isGoingToOnboarding = state.matchedLocation == '/onboarding';
-        
-        if (!hasCompletedOnboarding && !isGoingToOnboarding) {
-            return '/onboarding';
+        final isGoingToPermissions = state.matchedLocation == '/permissions';
+
+        if (!_hasCompletedOnboarding && !isGoingToOnboarding) {
+          return '/onboarding';
         }
 
-        if (hasCompletedOnboarding && isGoingToOnboarding) {
-            return '/';
+        if (_hasCompletedOnboarding && isGoingToOnboarding) {
+          return _hasCompletedPermissions ? '/' : '/permissions';
         }
 
-        if (session == null && !isGoingToLogin && !isGoingToOnboarding) {
+        if (_hasCompletedOnboarding &&
+            !_hasCompletedPermissions &&
+            !isGoingToPermissions) {
+          return '/permissions';
+        }
+
+        if (_hasCompletedPermissions && isGoingToPermissions) {
+          return session == null ? '/login' : '/';
+        }
+
+        if (session == null &&
+            !isGoingToLogin &&
+            !isGoingToOnboarding &&
+            !isGoingToPermissions) {
           return '/login';
         }
         if (session != null && isGoingToLogin) {
@@ -158,7 +210,13 @@ class MyApp extends StatelessWidget {
       routes: [
         GoRoute(
           path: '/onboarding',
-          builder: (context, state) => const OnboardingScreen(),
+          builder: (context, state) =>
+              OnboardingScreen(onCompleted: _handleOnboardingCompleted),
+        ),
+        GoRoute(
+          path: '/permissions',
+          builder: (context, state) =>
+              PermissionsScreen(onCompleted: _handlePermissionsCompleted),
         ),
         GoRoute(
           path: '/',
@@ -167,6 +225,10 @@ class MyApp extends StatelessWidget {
         GoRoute(
           path: '/login',
           builder: (context, state) => const LoginScreen(),
+        ),
+        GoRoute(
+          path: '/auth/callback',
+          builder: (context, state) => const AuthCallbackScreen(),
         ),
         GoRoute(
           path: '/create',
@@ -199,38 +261,37 @@ class MyApp extends StatelessWidget {
       builder: (context, themeProvider, child) {
         return MaterialApp.router(
           title: 'Dynamic QR Hub',
-          themeMode: themeProvider.themeMode, 
+          themeMode: themeProvider.themeMode,
           theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.grey.shade50,
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.light().textTheme,
-        ),
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.dark,
-        ).copyWith(
-          surface: Colors.black, // AMOLED dark surface
-          onSurface: Colors.white,
-        ),
-        scaffoldBackgroundColor: Colors.black, // AMOLED dark scaffold
-        cardColor: const Color(0xFF121212), // Slightly lighter for cards to contrast
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.black,
-          surfaceTintColor: Colors.black,
-        ),
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.dark().textTheme,
-        ),
-      ),
-      routerConfig: router,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.indigo,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: Colors.grey.shade50,
+            textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
+          ),
+          darkTheme: ThemeData(
+            colorScheme:
+                ColorScheme.fromSeed(
+                  seedColor: Colors.indigo,
+                  brightness: Brightness.dark,
+                ).copyWith(
+                  surface: Colors.black, // AMOLED dark surface
+                  onSurface: Colors.white,
+                ),
+            scaffoldBackgroundColor: Colors.black, // AMOLED dark scaffold
+            cardColor: const Color(
+              0xFF121212,
+            ), // Slightly lighter for cards to contrast
+            useMaterial3: true,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.black,
+              surfaceTintColor: Colors.black,
+            ),
+            textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+          ),
+          routerConfig: router,
         );
       },
     );
