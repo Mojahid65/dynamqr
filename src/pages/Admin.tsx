@@ -4,11 +4,9 @@ import { supabase } from '../lib/supabase';
 import { 
   LogOut, 
   ArrowLeft, 
-  Plus, 
   Check, 
   X, 
   ShieldAlert, 
-  Settings, 
   Users,
   Search,
   Bell,
