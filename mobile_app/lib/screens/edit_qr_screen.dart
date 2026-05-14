@@ -34,8 +34,7 @@ class _EditQrScreenState extends State<EditQrScreen> {
 
       await Supabase.instance.client.from('qr_codes').update({
         'destination_url': _destinationUrlController.text.trim(),
-        if (widget.qrData['keyword'] != null || keyword != widget.qrData['short_code'])
-          'keyword': keyword.isNotEmpty ? keyword : null,
+        'keyword': keyword.isNotEmpty ? keyword : null,
       }).eq('id', widget.qrData['id']);
 
       if (mounted) {

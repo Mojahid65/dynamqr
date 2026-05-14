@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../core/constants.dart';
+import '../core/google_sign_in_config.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -225,27 +225,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _continueWithGoogle() async {
     if (_isLoading || _isGoogleLoading) return;
-    if (googleWebClientId.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Google sign in is not configured. Add your Web Client ID in constants.dart',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    final webClientId = GoogleSignInConfig.clientId;
 
     setState(() => _isGoogleLoading = true);
     try {
       final googleSignIn = GoogleSignIn.instance;
-      await googleSignIn.initialize(serverClientId: googleWebClientId);
+      if (webClientId.trim().isNotEmpty) {
+        await googleSignIn.initialize(serverClientId: webClientId);
+      } else {
+        await googleSignIn.initialize();
+      }
 
       final googleUser = await googleSignIn.authenticate();
       final googleAuth = googleUser.authentication;
+      final googleAuthorization = await googleUser.authorizationClient
+          .authorizationForScopes(<String>['email', 'profile', 'openid']);
       final idToken = googleAuth.idToken;
-      final accessToken = googleAuth.accessToken;
+      final accessToken = googleAuthorization?.accessToken;
 
       if (idToken == null || accessToken == null) {
         throw const AuthException(
@@ -258,6 +254,13 @@ class _LoginScreenState extends State<LoginScreen> {
         idToken: idToken,
         accessToken: accessToken,
       );
+      
+      // Wait for the session to be fully populated in the client
+      for (int i = 0; i < 20; i++) {
+        if (Supabase.instance.client.auth.currentSession != null) break;
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
       if (mounted) context.go('/');
     } on AuthException catch (e) {
       if (mounted) {
@@ -267,8 +270,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on GoogleSignInException catch (e) {
       if (mounted && e.code != GoogleSignInExceptionCode.canceled) {
+        final message = webClientId.trim().isEmpty
+            ? 'Google Sign-In is not configured yet. Add a Web Client ID in assets/google_web_client_id.txt and update Firebase google-services.json.'
+            : (e.description ?? 'Google sign in failed');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.description), backgroundColor: Colors.red),
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
     } catch (_) {

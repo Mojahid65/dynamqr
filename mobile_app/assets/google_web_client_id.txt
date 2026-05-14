@@ -1,0 +1,5 @@
+# Google Sign-In: Web Client ID (OAuth 2.0 "Web application" type).
+# Google Cloud Console → APIs & Services → Credentials → Create credentials.
+# Paste your client ID on the line below (no # prefix). Example:
+# 956699522395-ko7ohf81g6p7u09jhp4fp5uamrp8iti5.apps.googleusercontent.com
+956699522395-ko7ohf81g6p7u09jhp4fp5uamrp8iti5.apps.googleusercontent.com

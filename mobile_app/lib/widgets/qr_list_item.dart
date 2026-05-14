@@ -1,11 +1,9 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
-import '../core/constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/notification_service.dart';
 
 class QrListItemWidget extends StatefulWidget {
@@ -26,11 +24,18 @@ class QrListItemWidget extends StatefulWidget {
 
 class _QrListItemWidgetState extends State<QrListItemWidget> {
   final ScreenshotController _screenshotController = ScreenshotController();
+  final _supabase = Supabase.instance.client;
   String _selectedTheme = 'Classic';
   Color _selectedColor = Colors.black;
   Color _selectedEyeColor = Colors.black;
 
-  final List<String> _themes = ['Classic', 'Rounded', 'Thin', 'Smooth', 'Circles'];
+  final List<String> _themes = [
+    'Classic',
+    'Rounded',
+    'Thin',
+    'Smooth',
+    'Circles',
+  ];
   final Map<String, Color> _colors = {
     'Black': Colors.black,
     'Indigo': Colors.indigo,
@@ -39,34 +44,116 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
     'Amber': Colors.amber,
   };
 
+  @override
+  void initState() {
+    super.initState();
+    _loadStyleFromAccount();
+  }
+
+  Future<void> _loadStyleFromAccount() async {
+    final user = _supabase.auth.currentUser;
+    final metadata = user?.userMetadata;
+    if (metadata == null) return;
+
+    final savedTheme = metadata['qr_theme'] as String?;
+    final savedColor = metadata['qr_color'] as String?;
+    final savedEyeColor = metadata['qr_eye_color'] as String?;
+
+    if (!mounted) return;
+    setState(() {
+      if (savedTheme != null && _themes.contains(savedTheme)) {
+        _selectedTheme = savedTheme;
+      }
+      _selectedColor = _hexToColor(savedColor) ?? _selectedColor;
+      _selectedEyeColor = _hexToColor(savedEyeColor) ?? _selectedEyeColor;
+    });
+  }
+
+  Future<void> _saveStyleToAccount() async {
+    try {
+      await _supabase.auth.updateUser(
+        UserAttributes(
+          data: {
+            'qr_theme': _selectedTheme,
+            'qr_color': _colorToHex(_selectedColor),
+            'qr_eye_color': _colorToHex(_selectedEyeColor),
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint('Failed to save QR style preferences: $e');
+    }
+  }
+
+  String _colorToHex(Color color) {
+    final hex = color.toARGB32().toRadixString(16).padLeft(8, '0');
+    return '#$hex';
+  }
+
+  Color? _hexToColor(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    final cleaned = hex.replaceFirst('#', '');
+    if (cleaned.length != 8) return null;
+    final value = int.tryParse(cleaned, radix: 16);
+    if (value == null) return null;
+    return Color(value);
+  }
+
   QrDataModuleStyle _getModuleStyle() {
     switch (_selectedTheme) {
       case 'Rounded':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: _selectedColor);
+        return QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.circle,
+          color: _selectedColor,
+        );
       case 'Thin':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: _selectedColor);
+        return QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: _selectedColor,
+        );
       case 'Smooth':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: _selectedColor);
+        return QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.circle,
+          color: _selectedColor,
+        );
       case 'Circles':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: _selectedColor);
+        return QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.circle,
+          color: _selectedColor,
+        );
       case 'Classic':
       default:
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: _selectedColor);
+        return QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: _selectedColor,
+        );
     }
   }
 
   QrEyeStyle _getEyeStyle() {
     switch (_selectedTheme) {
       case 'Rounded':
-        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: _selectedEyeColor);
+        return QrEyeStyle(
+          eyeShape: QrEyeShape.circle,
+          color: _selectedEyeColor,
+        );
       case 'Smooth':
-        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: _selectedEyeColor);
+        return QrEyeStyle(
+          eyeShape: QrEyeShape.circle,
+          color: _selectedEyeColor,
+        );
       case 'Circles':
-        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: _selectedEyeColor);
+        return QrEyeStyle(
+          eyeShape: QrEyeShape.circle,
+          color: _selectedEyeColor,
+        );
       case 'Classic':
       case 'Thin':
       default:
-        return QrEyeStyle(eyeShape: QrEyeShape.square, color: _selectedEyeColor);
+        return QrEyeStyle(
+          eyeShape: QrEyeShape.square,
+          color: _selectedEyeColor,
+        );
     }
   }
 
@@ -81,23 +168,28 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
         color: _selectedColor,
         emptyColor: Colors.white,
       );
-      
+
       final picData = await painter.toImageData(2048);
       if (picData != null) {
         final result = await ImageGallerySaverPlus.saveImage(
           picData.buffer.asUint8List(),
           quality: 100,
-          name: "QR_${widget.qr['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
+          name:
+              "QR_${widget.qr['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
         );
         if (result['isSuccess']) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('QR Code saved to gallery!'), backgroundColor: Colors.green),
+              const SnackBar(
+                content: Text('QR Code saved to gallery!'),
+                backgroundColor: Colors.green,
+              ),
             );
           }
           await NotificationService().showNotification(
             title: 'QR Code Saved',
-            body: 'Successfully saved QR code for ${widget.qr['destination_url']} to your gallery.',
+            body:
+                'Successfully saved QR code for ${widget.qr['destination_url']} to your gallery.',
           );
         } else {
           throw Exception('Failed to save');
@@ -106,7 +198,12 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving image. Make sure storage permission is granted.'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(
+              'Error saving image. Make sure storage permission is granted.',
+            ),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -123,7 +220,9 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+        side: BorderSide(
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -136,13 +235,16 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                   controller: _screenshotController,
                   child: GestureDetector(
                     onTap: () {
-                      context.push('/qr_fullscreen', extra: {
-                        'qrData': widget.qr,
-                        'shortUrl': shortUrl,
-                        'selectedTheme': _selectedTheme,
-                        'selectedColor': _selectedColor,
-                        'selectedEyeColor': _selectedEyeColor,
-                      });
+                      context.push(
+                        '/qr_fullscreen',
+                        extra: {
+                          'qrData': widget.qr,
+                          'shortUrl': shortUrl,
+                          'selectedTheme': _selectedTheme,
+                          'selectedColor': _selectedColor,
+                          'selectedEyeColor': _selectedEyeColor,
+                        },
+                      );
                     },
                     child: Hero(
                       tag: 'qr-${widget.qr['id']}',
@@ -150,7 +252,11 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade200,
+                          ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: QrImageView(
@@ -172,20 +278,30 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                     children: [
                       Text(
                         widget.qr['destination_url'],
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.indigo.shade50,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           '/${widget.qr['keyword'] ?? widget.qr['short_code']}',
-                          style: TextStyle(color: Colors.indigo.shade700, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: Colors.indigo.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -193,15 +309,26 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.download, size: 20, color: Colors.indigo),
+                            icon: const Icon(
+                              Icons.download,
+                              size: 20,
+                              color: Colors.indigo,
+                            ),
                             onPressed: _downloadQr,
                             constraints: const BoxConstraints(),
                             padding: const EdgeInsets.all(8),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.edit, size: 20, color: Colors.grey),
+                            icon: const Icon(
+                              Icons.edit,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
                             onPressed: () async {
-                              final result = await context.push('/edit', extra: widget.qr);
+                              final result = await context.push(
+                                '/edit',
+                                extra: widget.qr,
+                              );
                               if (result == true) {
                                 widget.onRefresh();
                               }
@@ -210,13 +337,19 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                             padding: const EdgeInsets.all(8),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete, size: 20, color: Colors.grey),
+                            icon: const Icon(
+                              Icons.delete,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
                             onPressed: () {
                               showDialog(
                                 context: context,
                                 builder: (context) => AlertDialog(
                                   title: const Text('Delete QR Code?'),
-                                  content: const Text('Are you sure you want to delete this QR code? This action cannot be undone.'),
+                                  content: const Text(
+                                    'Are you sure you want to delete this QR code? This action cannot be undone.',
+                                  ),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context),
@@ -227,7 +360,10 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                         Navigator.pop(context);
                                         widget.onDelete(widget.qr['id']);
                                       },
-                                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                      child: const Text(
+                                        'Delete',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -237,7 +373,7 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                             padding: const EdgeInsets.all(8),
                           ),
                         ],
-                      )
+                      ),
                     ],
                   ),
                 ),
@@ -246,7 +382,10 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
             const Divider(height: 32),
             Row(
               children: [
-                const Text('Theme:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Theme:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: SingleChildScrollView(
@@ -264,15 +403,26 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                 setState(() {
                                   _selectedTheme = theme;
                                 });
+                                _saveStyleToAccount();
                               }
                             },
-                            selectedColor: isDark ? Colors.indigo.shade900 : Colors.indigo.shade100,
-                            backgroundColor: isDark ? Colors.grey.shade900 : Colors.white,
+                            selectedColor: isDark
+                                ? Colors.indigo.shade900
+                                : Colors.indigo.shade100,
+                            backgroundColor: isDark
+                                ? Colors.grey.shade900
+                                : Colors.white,
                             labelStyle: TextStyle(
-                              color: isSelected 
-                                ? (isDark ? Colors.white : Colors.indigo.shade900)
-                                : (isDark ? Colors.grey.shade300 : Colors.black87),
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected
+                                  ? (isDark
+                                        ? Colors.white
+                                        : Colors.indigo.shade900)
+                                  : (isDark
+                                        ? Colors.grey.shade300
+                                        : Colors.black87),
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                             ),
                           ),
                         );
@@ -285,7 +435,10 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Color:  ', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Color:  ',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: SingleChildScrollView(
@@ -306,6 +459,7 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                   _selectedEyeColor = colorValue;
                                 }
                               });
+                              _saveStyleToAccount();
                             },
                             child: Container(
                               width: 36,
@@ -314,7 +468,9 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                 color: colorValue,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: isSelected ? Colors.indigo : Colors.transparent,
+                                  color: isSelected
+                                      ? Colors.indigo
+                                      : Colors.transparent,
                                   width: 3,
                                 ),
                                 boxShadow: [
@@ -323,7 +479,7 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                       color: colorValue.withOpacity(0.4),
                                       blurRadius: 8,
                                       spreadRadius: 2,
-                                    )
+                                    ),
                                 ],
                               ),
                             ),
@@ -338,7 +494,10 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Eye Color:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Eye Color:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: SingleChildScrollView(
@@ -354,6 +513,7 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                               setState(() {
                                 _selectedEyeColor = colorValue;
                               });
+                              _saveStyleToAccount();
                             },
                             child: Container(
                               width: 36,
@@ -362,7 +522,9 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                 color: colorValue,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: isSelected ? Colors.indigo : Colors.transparent,
+                                  color: isSelected
+                                      ? Colors.indigo
+                                      : Colors.transparent,
                                   width: 3,
                                 ),
                                 boxShadow: [
@@ -371,7 +533,7 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                                       color: colorValue.withOpacity(0.4),
                                       blurRadius: 8,
                                       spreadRadius: 2,
-                                    )
+                                    ),
                                 ],
                               ),
                             ),

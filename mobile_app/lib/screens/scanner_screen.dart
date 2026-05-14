@@ -26,6 +26,15 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   }
 
   @override
+  void reassemble() {
+    super.reassemble();
+    // Stop the scanner during hot reload to prevent "already running" error
+    if (mounted) {
+      _controller.stop();
+    }
+  }
+
+  @override
   void dispose() {
     _animationController.dispose();
     _controller.dispose();

@@ -46,7 +46,28 @@
                     android:scheme="dynamqr"
                     android:host="auth" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="dynamqr"
+                    android:host="app"
+                    android:pathPrefix="/scan" />
+            </intent-filter>
         </activity>
+        
+        <service
+            android:name=".ScannerTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_scanner"
+            android:label="Scan QR"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

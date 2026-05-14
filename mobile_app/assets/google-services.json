@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "715971039552",
+    "project_id": "dynamqr",
+    "storage_bucket": "dynamqr.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:715971039552:android:8e17ce22e292cc6b46eaa5",
+        "android_client_info": {
+          "package_name": "com.dynamqr.mojahidx.in"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTodm0VtHRYePLVVX_fWENZv5ZN52K-DM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

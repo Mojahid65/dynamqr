@@ -50,7 +50,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .order('created_at', ascending: false);
       if (mounted) {
         setState(() {
-          _qrCodes = data;
+          _qrCodes = data.where((item) {
+            final config = item['design_config'] as Map<String, dynamic>?;
+            return config?['is_link'] != true;
+          }).toList();
           _isLoading = false;
         });
       }

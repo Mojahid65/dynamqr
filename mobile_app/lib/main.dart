@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/constants.dart';
+import 'core/google_sign_in_config.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/create_qr_screen.dart';
@@ -12,6 +13,9 @@ import 'screens/onboarding_screen.dart';
 import 'screens/permissions_screen.dart';
 import 'screens/qr_fullscreen_screen.dart';
 import 'screens/auth_callback_screen.dart';
+import 'screens/animated_splash_screen.dart';
+import 'screens/main_navigation_screen.dart';
+import 'screens/scanner_screen.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/notification_service.dart';
@@ -28,6 +32,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await GoogleSignInConfig.load();
+
   await Firebase.initializeApp(
     options: const FirebaseOptions(
       apiKey: 'AIzaSyCTodm0VtHRYePLVVX_fWENZv5ZN52K-DM',
@@ -41,6 +47,23 @@ Future<void> main() async {
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   await NotificationService().init();
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) return;
+    await NotificationService().showNotification(
+      title: notification.title ?? 'DynamQR',
+      body: notification.body ?? 'You have a new notification.',
+    );
+  });
+
+  final notificationSettings = await FirebaseMessaging.instance
+      .getNotificationSettings();
+  if (notificationSettings.authorizationStatus ==
+          AuthorizationStatus.authorized ||
+      notificationSettings.authorizationStatus ==
+          AuthorizationStatus.provisional) {
+    await FirebaseMessaging.instance.subscribeToTopic('announcements');
+  }
 
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
@@ -146,12 +169,19 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   late bool _hasCompletedOnboarding;
   late bool _hasCompletedPermissions;
+  bool _showSplash = true;
+  bool _isDeepLinkScan = false;
 
   @override
   void initState() {
     super.initState();
     _hasCompletedOnboarding = widget.initialHasCompletedOnboarding;
     _hasCompletedPermissions = widget.initialHasCompletedPermissions;
+    Future<void>.delayed(const Duration(milliseconds: 2400), () {
+      if (mounted) {
+        setState(() => _showSplash = false);
+      }
+    });
   }
 
   void _handleOnboardingCompleted() {
@@ -177,6 +207,11 @@ class _MyAppState extends State<MyApp> {
         final isGoingToLogin = state.matchedLocation == '/login';
         final isGoingToOnboarding = state.matchedLocation == '/onboarding';
         final isGoingToPermissions = state.matchedLocation == '/permissions';
+        final isGoingToScan = state.matchedLocation == '/scan';
+
+        if (isGoingToScan) {
+          _isDeepLinkScan = true;
+        }
 
         if (!_hasCompletedOnboarding && !isGoingToOnboarding) {
           return '/onboarding';
@@ -220,7 +255,11 @@ class _MyAppState extends State<MyApp> {
         ),
         GoRoute(
           path: '/',
-          builder: (context, state) => const DashboardScreen(),
+          builder: (context, state) => const MainNavigationScreen(),
+        ),
+        GoRoute(
+          path: '/scan',
+          builder: (context, state) => const ScannerScreen(),
         ),
         GoRoute(
           path: '/login',
@@ -292,6 +331,15 @@ class _MyAppState extends State<MyApp> {
             textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
           ),
           routerConfig: router,
+          builder: (context, child) {
+            return Stack(
+              children: [
+                if (child != null) child,
+                if (_showSplash && !_isDeepLinkScan)
+                  const Positioned.fill(child: AnimatedSplashScreen()),
+              ],
+            );
+          },
         );
       },
     );

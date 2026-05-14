@@ -19,8 +19,9 @@ class _CreateQrScreenState extends State<CreateQrScreen> {
   String _generateShortCode() {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final random = Random();
-    return String.fromCharCodes(Iterable.generate(
-        6, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+    final suffix = String.fromCharCodes(
+        Iterable.generate(4, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+    return 'moja$suffix';
   }
 
   Future<void> _createQrCode() async {
@@ -31,14 +32,28 @@ class _CreateQrScreenState extends State<CreateQrScreen> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       final keyword = _keywordController.text.trim();
-      final shortCode = keyword.isNotEmpty ? keyword : _generateShortCode();
 
-      await Supabase.instance.client.from('qr_codes').insert({
-        'user_id': user?.id,
-        'destination_url': _destinationUrlController.text.trim(),
-        'keyword': keyword.isNotEmpty ? keyword : null,
-        'short_code': shortCode,
-      });
+      // Retry up to 5 times on the rare chance the random short code collides
+      bool inserted = false;
+      for (int attempt = 0; attempt < 5; attempt++) {
+        final shortCode = _generateShortCode();
+        try {
+          await Supabase.instance.client.from('qr_codes').insert({
+            'user_id': user?.id,
+            'destination_url': _destinationUrlController.text.trim(),
+            'short_code': shortCode,
+            if (keyword.isNotEmpty) 'keyword': keyword,
+          });
+          inserted = true;
+          break; // success — stop retrying
+        } on PostgrestException catch (e) {
+          if (e.code == '23505') {
+            continue; // duplicate key for random short code — retry
+          }
+          rethrow;
+        }
+      }
+      if (!inserted) throw Exception('Could not generate a unique code. Please try again.');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
