@@ -182,14 +182,32 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/5 py-8 text-center text-sm text-slate-500">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-            <QrCode className="w-3.5 h-3.5 text-white" />
+      <footer className="relative z-10 border-t border-white/5 py-10 text-sm text-slate-500">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                  <QrCode className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="font-semibold text-slate-300">DynamQR</span>
+              </div>
+              <p className="text-xs text-slate-500">
+                A MOJAHIDX product. Dynamic QR codes for modern brands.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 justify-center md:justify-end">
+              <Link to="/about" className="hover:text-white transition-colors">About</Link>
+              <Link to="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+              <Link to="/terms" className="hover:text-white transition-colors">Terms</Link>
+              <Link to="/data-deletion" className="hover:text-white transition-colors">Data Deletion</Link>
+              <Link to="/support" className="hover:text-white transition-colors">Support</Link>
+            </div>
           </div>
-          <span className="font-semibold text-slate-400">DynamQR</span>
+          <div className="mt-8 text-center text-xs text-slate-600">
+            &copy; {new Date().getFullYear()} DynamQR. Built by Mojahid.
+          </div>
         </div>
-        &copy; {new Date().getFullYear()} DynamQR. Built by Mojahid.
       </footer>
     </div>
   );

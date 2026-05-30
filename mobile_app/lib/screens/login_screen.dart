@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../core/google_sign_in_config.dart';
+import '../core/google_auth_service.dart';
+import '../main.dart' show appRouter;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,28 +24,89 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLogin = true;
   bool _obscurePassword = true;
 
+  GoogleSignInAccount? _suggestedAccount;
+  StreamSubscription<Session>? _sessionSub;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Reflect any account that's already been resolved (e.g. by the
+    // app-level lightweight auth attempt that fires on launch).
+    _suggestedAccount = GoogleAuthService.instance.lastAccount;
+
+    // Kick off our own lightweight attempt — harmless if main.dart already
+    // did one, and this lets us update the UI when an account appears.
+    _scheduleSilentAccountLookup();
+
+    // If a Google sign-in completes silently in the background (e.g. the
+    // app-level lightweight auth attempt finishes after this screen
+    // builds), navigate home automatically. The explicit "Continue with
+    // Google" button does NOT depend on this stream.
+    _sessionSub = GoogleAuthService.instance.signInStream.listen((_) {
+      if (!mounted) return;
+      // Avoid overriding an in-flight explicit sign-in.
+      if (_isGoogleLoading) return;
+      unawaited(_persistDeviceInfo());
+      appRouter.go('/');
+    });
+  }
+
+  Future<void> _scheduleSilentAccountLookup() async {
+    try {
+      await GoogleAuthService.instance.attemptAutoSignIn();
+      if (!mounted) return;
+      setState(() {
+        _suggestedAccount = GoogleAuthService.instance.lastAccount;
+      });
+    } catch (e) {
+      debugPrint('login silent auth lookup failed: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _sessionSub?.cancel();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _persistDeviceInfo() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final deviceInfo = DeviceInfoPlugin();
+      String deviceName = 'Unknown';
+      String osVersion = 'Unknown';
+      if (Platform.isAndroid) {
+        final info = await deviceInfo.androidInfo;
+        deviceName = '${info.manufacturer} ${info.model}';
+        osVersion = info.version.release;
+      } else if (Platform.isIOS) {
+        final info = await deviceInfo.iosInfo;
+        deviceName = info.name;
+        osVersion = info.systemVersion;
+      }
+      await supabase.from('profiles').update({
+        'device_name': deviceName,
+        'android_version': osVersion,
+      }).eq('id', user.id);
+    } catch (e) {
+      debugPrint('Failed to persist device info: $e');
+    }
+  }
+
   Future<void> _showVerificationDialog(String email) async {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              const Icon(
-                Icons.mark_email_unread_outlined,
-                color: Colors.indigo,
-                size: 28,
-              ),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('Verify Your Email')),
-            ],
-          ),
+          icon: const Icon(Icons.mark_email_unread_outlined),
+          title: const Text('Verify Your Email'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -51,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Text(
                   'We sent a verification link to:\n$email',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 16),
                 const Text('Follow these steps to complete registration:'),
@@ -61,11 +124,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 _buildStep(3, 'Click the "Verify Email" link inside'),
                 _buildStep(4, 'Return here and log in'),
                 const SizedBox(height: 16),
-                const Text(
-                  'Note: Check your spam folder if you don\'t see it within a few minutes.',
+                Text(
+                  'Tip: Check your spam folder if you don\'t see it within a few minutes.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -73,15 +136,12 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           actions: <Widget>[
-            TextButton(
-              child: const Text(
-                'I Understand',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+            FilledButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                setState(() => _isLogin = true); // Switch back to login view
+                setState(() => _isLogin = true);
               },
+              child: const Text('Got it'),
             ),
           ],
         );
@@ -90,6 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildStep(int number, String text) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -99,16 +160,16 @@ class _LoginScreenState extends State<LoginScreen> {
             width: 24,
             height: 24,
             decoration: BoxDecoration(
-              color: Colors.indigo.withOpacity(0.1),
+              color: cs.primaryContainer,
               shape: BoxShape.circle,
             ),
             child: Center(
               child: Text(
                 number.toString(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.indigo,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onPrimaryContainer,
                 ),
               ),
             ),
@@ -125,6 +186,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!isValid) return;
 
     setState(() => _isLoading = true);
+    final cs = Theme.of(context).colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
     try {
       if (_isLogin) {
         await Supabase.instance.client.auth.signInWithPassword(
@@ -132,25 +195,9 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text.trim(),
         );
 
-        // Update device info
+        final userId = Supabase.instance.client.auth.currentUser!.id;
+
         try {
-          final deviceInfo = DeviceInfoPlugin();
-          String deviceName = 'Unknown';
-          String androidVersion = 'Unknown';
-
-          if (Platform.isAndroid) {
-            final androidInfo = await deviceInfo.androidInfo;
-            deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
-            androidVersion = androidInfo.version.release;
-          } else if (Platform.isIOS) {
-            final iosInfo = await deviceInfo.iosInfo;
-            deviceName = iosInfo.name;
-            androidVersion = iosInfo.systemVersion;
-          }
-
-          final userId = Supabase.instance.client.auth.currentUser!.id;
-
-          // Check if banned first
           final profile = await Supabase.instance.client
               .from('profiles')
               .select('is_banned')
@@ -163,12 +210,13 @@ class _LoginScreenState extends State<LoginScreen> {
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
+                  icon: const Icon(Icons.block_rounded),
                   title: const Text('Account Suspended'),
                   content: const Text(
                     'Your account has been suspended by the administrator. Please contact support.',
                   ),
                   actions: [
-                    TextButton(
+                    FilledButton(
                       onPressed: () => Navigator.pop(ctx),
                       child: const Text('OK'),
                     ),
@@ -178,18 +226,11 @@ class _LoginScreenState extends State<LoginScreen> {
             }
             return;
           }
-
-          await Supabase.instance.client
-              .from('profiles')
-              .update({
-                'device_name': deviceName,
-                'android_version': androidVersion,
-              })
-              .eq('id', userId);
         } catch (e) {
-          debugPrint('Failed to update device info: $e');
+          debugPrint('Failed to check ban status: $e');
         }
 
+        await _persistDeviceInfo();
         if (mounted) context.go('/');
       } else {
         final email = _emailController.text.trim();
@@ -198,23 +239,25 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text.trim(),
         );
         if (mounted) {
-          // Hide loading before showing dialog
           setState(() => _isLoading = false);
           await _showVerificationDialog(email);
         }
       }
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: cs.errorContainer,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
-            content: Text('Unexpected error occurred'),
-            backgroundColor: Colors.red,
+            content: const Text('Unexpected error occurred'),
+            backgroundColor: cs.errorContainer,
           ),
         );
       }
@@ -225,156 +268,151 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _continueWithGoogle() async {
     if (_isLoading || _isGoogleLoading) return;
-    final webClientId = GoogleSignInConfig.clientId;
+    final cs = Theme.of(context).colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
 
     setState(() => _isGoogleLoading = true);
     try {
-      final googleSignIn = GoogleSignIn.instance;
-      if (webClientId.trim().isNotEmpty) {
-        await googleSignIn.initialize(serverClientId: webClientId);
-      } else {
-        await googleSignIn.initialize();
-      }
+      // Opens the system Credential Manager bottom sheet. On Android 14+
+      // this defaults to "continue as <last account>" so the user gets
+      // a one-tap experience for previously selected Google accounts.
+      final session = await GoogleAuthService.instance.signInExplicit();
+      debugPrint(
+          'Google sign-in succeeded. session.user=${session.user.id}');
 
-      final googleUser = await googleSignIn.authenticate();
-      final googleAuth = googleUser.authentication;
-      final googleAuthorization = await googleUser.authorizationClient
-          .authorizationForScopes(<String>['email', 'profile', 'openid']);
-      final idToken = googleAuth.idToken;
-      final accessToken = googleAuthorization?.accessToken;
+      // Navigate immediately. We deliberately do NOT await
+      // _persistDeviceInfo() — that's a fire-and-forget side effect, and
+      // a slow network round-trip there must not block the user from
+      // reaching the dashboard.
+      unawaited(_persistDeviceInfo());
 
-      if (idToken == null || accessToken == null) {
-        throw const AuthException(
-          'Google authentication failed. Missing token from Google.',
-        );
-      }
-
-      await Supabase.instance.client.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
-      );
-      
-      // Wait for the session to be fully populated in the client
-      for (int i = 0; i < 20; i++) {
-        if (Supabase.instance.client.auth.currentSession != null) break;
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-      
-      if (mounted) context.go('/');
-    } on AuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
+      if (!mounted) return;
+      // Use the global appRouter so we don't depend on the LoginScreen's
+      // BuildContext being still mounted — and call go() which is
+      // navigation-stack-replacing rather than push().
+      appRouter.go('/');
     } on GoogleSignInException catch (e) {
+      debugPrint('GoogleSignInException ${e.code}: ${e.description}');
       if (mounted && e.code != GoogleSignInExceptionCode.canceled) {
-        final message = webClientId.trim().isEmpty
-            ? 'Google Sign-In is not configured yet. Add a Web Client ID in assets/google_web_client_id.txt and update Firebase google-services.json.'
-            : (e.description ?? 'Google sign in failed');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.description ?? 'Google sign in failed'),
+            backgroundColor: cs.errorContainer,
+          ),
         );
       }
-    } catch (_) {
+    } on AuthException catch (e) {
+      debugPrint('AuthException: ${e.message}');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Google sign in failed. Please try again.'),
-            backgroundColor: Colors.red,
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: cs.errorContainer,
+          ),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('Google sign in unexpected error: $e\n$st');
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Google sign in failed. Please try again.'),
+            backgroundColor: cs.errorContainer,
           ),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isGoogleLoading = false);
-      }
+      if (mounted) setState(() => _isGoogleLoading = false);
     }
   }
 
   @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final gradientColors = isDark
-        ? [const Color(0xFF0B0B0B), const Color(0xFF111827)]
-        : [const Color(0xFFE8EEFF), const Color(0xFFD5DEFF)];
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: gradientColors,
-          ),
-        ),
+      body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 430),
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF171717) : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
-                    blurRadius: 30,
-                    offset: const Offset(0, 18),
-                  ),
-                ],
-              ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
               child: Form(
                 key: _formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      height: 72,
-                      width: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.indigo.withOpacity(0.12),
-                      ),
-                      child: Icon(
-                        Icons.qr_code_2,
-                        size: 38,
-                        color: isDark ? Colors.indigo.shade200 : Colors.indigo,
+                    Center(
+                      child: Container(
+                        height: 88,
+                        width: 88,
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: Icon(
+                          Icons.qr_code_2_rounded,
+                          size: 44,
+                          color: cs.onPrimaryContainer,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 28),
                     Text(
-                      _isLogin ? 'Welcome Back' : 'Create Account',
+                      _isLogin ? 'Welcome back' : 'Create your account',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
+                      style: tt.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       _isLogin
-                          ? 'Sign in to continue managing your QR codes.'
-                          : 'Create an account to start making dynamic QR codes.',
+                          ? 'Sign in to manage your QR codes'
+                          : 'Start making dynamic QR codes today',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isDark
-                            ? Colors.grey.shade300
-                            : Colors.grey.shade600,
-                        height: 1.35,
+                      style: tt.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 24),
+
+                    // Continue-as card surfaces the previously selected
+                    // Google account when Credential Manager finds one
+                    // silently. One tap signs the user back in without
+                    // showing the chooser.
+                    if (_suggestedAccount != null) ...[
+                      _ContinueAsCard(
+                        account: _suggestedAccount!,
+                        loading: _isGoogleLoading,
+                        onTap: (_isLoading || _isGoogleLoading)
+                            ? null
+                            : _continueWithGoogle,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: cs.outlineVariant)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12),
+                            child: Text(
+                              'OR USE EMAIL',
+                              style: tt.labelSmall?.copyWith(
+                                letterSpacing: 1.5,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: cs.outlineVariant)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -391,9 +429,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: 'Email',
                         hintText: 'name@example.com',
                         prefixIcon: Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(14)),
-                        ),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -418,133 +453,91 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           icon: Icon(
                             _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 20,
                           ),
-                        ),
-                        border: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(14)),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 24),
                     SizedBox(
                       height: 52,
-                      child: ElevatedButton(
+                      child: FilledButton(
                         onPressed: (_isLoading || _isGoogleLoading)
                             ? null
                             : _submit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
                         child: _isLoading
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
-                                  color: Colors.white,
                                   strokeWidth: 2,
                                 ),
                               )
-                            : Text(
-                                _isLogin ? 'Sign In' : 'Sign Up',
-                                style: const TextStyle(fontSize: 16),
-                              ),
+                            : Text(_isLogin ? 'Sign In' : 'Sign Up'),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: isDark
-                                ? Colors.grey.shade700
-                                : Colors.grey.shade300,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
+
+                    // Show the standard "Continue with Google" only when
+                    // we don't have a suggested account (otherwise the
+                    // continue-as card handles it).
+                    if (_suggestedAccount == null) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: cs.outlineVariant)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12),
+                            child: Text(
+                              'OR',
+                              style: tt.labelSmall?.copyWith(
+                                letterSpacing: 1.5,
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: isDark
-                                ? Colors.grey.shade700
-                                : Colors.grey.shade300,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      height: 52,
-                      child: OutlinedButton.icon(
-                        onPressed: (_isLoading || _isGoogleLoading)
-                            ? null
-                            : _continueWithGoogle,
-                        icon: _isGoogleLoading
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'G',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFFDB4437),
-                                ),
-                              ),
-                        label: Text(
-                          _isLogin
-                              ? 'Continue with Google'
-                              : 'Sign Up with Google',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: isDark
-                                ? Colors.grey.shade700
-                                : Colors.grey.shade300,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                          Expanded(child: Divider(color: cs.outlineVariant)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: (_isLoading || _isGoogleLoading)
+                              ? null
+                              : _continueWithGoogle,
+                          icon: _isGoogleLoading
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const _GoogleLogo(),
+                          label: Text(
+                            _isLogin
+                                ? 'Continue with Google'
+                                : 'Sign Up with Google',
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: (_isLoading || _isGoogleLoading)
-                          ? null
-                          : () {
-                              setState(() {
-                                _isLogin = !_isLogin;
-                              });
-                            },
-                      child: Text(
-                        _isLogin
-                            ? 'Need an account? Sign Up'
-                            : 'Already have an account? Sign In',
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.indigo.shade200
-                              : Colors.indigo.shade700,
+                    ],
+
+                    const SizedBox(height: 16),
+                    Center(
+                      child: TextButton(
+                        onPressed: (_isLoading || _isGoogleLoading)
+                            ? null
+                            : () {
+                                setState(() => _isLogin = !_isLogin);
+                              },
+                        child: Text(
+                          _isLogin
+                              ? 'New here? Sign Up'
+                              : 'Already have an account? Sign In',
                         ),
                       ),
                     ),
@@ -557,4 +550,164 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+/// "Continue as <name>" card. Mirrors the modern Google one-tap pattern:
+/// shows the user's avatar + email so re-authenticating is one tap.
+class _ContinueAsCard extends StatelessWidget {
+  final GoogleSignInAccount account;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  const _ContinueAsCard({
+    required this.account,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final initials = _initialsFor(account);
+    final photoUrl = account.photoUrl;
+
+    return Material(
+      color: cs.primaryContainer,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: cs.primary,
+                foregroundImage: photoUrl != null
+                    ? NetworkImage(photoUrl)
+                    : null,
+                child: Text(
+                  initials,
+                  style: tt.titleMedium?.copyWith(
+                    color: cs.onPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Continue as ${account.displayName ?? account.email.split('@').first}',
+                      style: tt.titleSmall?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      account.email,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onPrimaryContainer
+                            .withValues(alpha: 0.85),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              loading
+                  ? SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: cs.onPrimaryContainer,
+                      ),
+                    )
+                  : Icon(
+                      Icons.arrow_forward_rounded,
+                      color: cs.onPrimaryContainer,
+                    ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _initialsFor(GoogleSignInAccount a) {
+    final name = a.displayName ?? a.email;
+    if (name.isEmpty) return '?';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    final letters = parts.take(2).map((p) => p.characters.first).join();
+    return letters.toUpperCase();
+  }
+}
+
+/// Google "G" logo painted with the official 4 brand colors.
+/// Self-contained so we don't ship a separate asset for it.
+class _GoogleLogo extends StatelessWidget {
+  const _GoogleLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 18,
+      height: 18,
+      child: CustomPaint(painter: _GoogleGPainter()),
+    );
+  }
+}
+
+class _GoogleGPainter extends CustomPainter {
+  static const _blue = Color(0xFF4285F4);
+  static const _green = Color(0xFF34A853);
+  static const _yellow = Color(0xFFFBBC05);
+  static const _red = Color(0xFFEA4335);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.width;
+    final stroke = s * 0.22;
+    final r = (s - stroke) / 2;
+    final c = Offset(s / 2, s / 2);
+    final rect = Rect.fromCircle(center: c, radius: r);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.butt;
+
+    // Four arcs roughly matching the Google logo color distribution.
+    canvas.drawArc(rect, _deg(-25), _deg(105), false, paint..color = _blue);
+    canvas.drawArc(rect, _deg(80), _deg(75), false, paint..color = _green);
+    canvas.drawArc(rect, _deg(155), _deg(75), false, paint..color = _yellow);
+    canvas.drawArc(rect, _deg(230), _deg(105), false, paint..color = _red);
+
+    // Horizontal "tail" of the G — a small bar from the center outwards.
+    final barPaint = Paint()
+      ..color = _blue
+      ..style = PaintingStyle.fill;
+    final barHeight = stroke;
+    final barRect = Rect.fromLTWH(
+      c.dx,
+      c.dy - barHeight / 2,
+      r + stroke / 2,
+      barHeight,
+    );
+    canvas.drawRect(barRect, barPaint);
+  }
+
+  double _deg(double d) => d * 3.1415926535 / 180.0;
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

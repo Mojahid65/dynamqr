@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart';
 
 class EditLinkScreen extends StatefulWidget {
   final Map<String, dynamic> linkData;
@@ -20,33 +19,38 @@ class _EditLinkScreenState extends State<EditLinkScreen> {
   @override
   void initState() {
     super.initState();
-    _destinationUrlController = TextEditingController(text: widget.linkData['destination_url']);
-    _keywordController = TextEditingController(text: widget.linkData['keyword'] ?? '');
+    _destinationUrlController =
+        TextEditingController(text: widget.linkData['destination_url']);
+    _keywordController =
+        TextEditingController(text: widget.linkData['keyword'] ?? '');
   }
 
   Future<void> _updateLink() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
+    final cs = Theme.of(context).colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final keyword = _keywordController.text.trim();
-
       await Supabase.instance.client.from('qr_codes').update({
         'destination_url': _destinationUrlController.text.trim(),
         'keyword': keyword.isNotEmpty ? keyword : null,
       }).eq('id', widget.linkData['id']);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Link updated successfully!'), backgroundColor: Colors.green),
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Link updated')),
         );
-        Navigator.pop(context, true); // Return true to trigger reload
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update Link: $e'), backgroundColor: Colors.red),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to update: $e'),
+            backgroundColor: cs.errorContainer,
+          ),
         );
       }
     } finally {
@@ -63,106 +67,95 @@ class _EditLinkScreenState extends State<EditLinkScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Form(
+          key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cs.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.edit_rounded,
+                      color: cs.onTertiaryContainer,
+                      size: 22,
+                    ),
                   ),
-                ),
-              ),
-              const Text(
-                'Edit Dynamic Link',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Edit Dynamic Link',
+                          style: tt.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Code: /${widget.linkData['short_code']}',
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: _destinationUrlController,
-                      decoration: const InputDecoration(
-                        labelText: 'Destination URL *',
-                        hintText: 'https://example.com',
-                        prefixIcon: Icon(Icons.link),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                      ),
-                      keyboardType: TextInputType.url,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a destination URL';
-                        }
-                        if (!value.startsWith('http://') &&
-                            !value.startsWith('https://')) {
-                          return 'URL must start with http:// or https://';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _keywordController,
-                      decoration: const InputDecoration(
-                        labelText: 'Label (Optional)',
-                        hintText: 'e.g., Summer Campaign',
-                        prefixIcon: Icon(Icons.label),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
+              TextFormField(
+                controller: _destinationUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Destination URL',
+                  hintText: 'https://example.com',
+                  prefixIcon: Icon(Icons.link_rounded),
+                ),
+                keyboardType: TextInputType.url,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a destination URL';
+                  }
+                  if (!value.startsWith('http://') &&
+                      !value.startsWith('https://')) {
+                    return 'URL must start with http:// or https://';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _keywordController,
+                decoration: const InputDecoration(
+                  labelText: 'Label (optional)',
+                  hintText: 'e.g. Summer Campaign',
+                  prefixIcon: Icon(Icons.label_outline_rounded),
                 ),
               ),
-              const SizedBox(height: 32),
-              ElevatedButton(
+              const SizedBox(height: 24),
+              FilledButton(
                 onPressed: _isLoading ? null : _updateLink,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
                 child: _isLoading
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text(
-                        'Save Changes',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
+                    : const Text('Save Changes'),
               ),
             ],
           ),

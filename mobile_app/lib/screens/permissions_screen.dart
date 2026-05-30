@@ -38,25 +38,18 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         context.go('/login');
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _requestMediaPermission() async {
     if (Platform.isAndroid) {
       final photosStatus = await Permission.photos.status;
-      if (!photosStatus.isGranted) {
-        await Permission.photos.request();
-      }
+      if (!photosStatus.isGranted) await Permission.photos.request();
       final storageStatus = await Permission.storage.status;
-      if (!storageStatus.isGranted) {
-        await Permission.storage.request();
-      }
+      if (!storageStatus.isGranted) await Permission.storage.request();
       return;
     }
-
     await Permission.photos.request();
   }
 
@@ -64,14 +57,13 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('has_completed_permissions', true);
     widget.onCompleted?.call();
-    if (mounted) {
-      context.go('/login');
-    }
+    if (mounted) context.go('/login');
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
       body: SafeArea(
@@ -84,53 +76,61 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.verified_user_outlined,
-                    size: 72,
-                    color: isDark ? Colors.indigo.shade200 : Colors.indigo,
+                  Center(
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer,
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: Icon(
+                        Icons.verified_user_rounded,
+                        size: 44,
+                        color: cs.onPrimaryContainer,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 20),
-                  const Text(
+                  const SizedBox(height: 28),
+                  Text(
                     'Enable Permissions',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                    style: tt.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Allow permissions to unlock scanning, saving QR images, and important app alerts.',
+                    'Allow permissions to scan QR codes, save images, and receive important alerts.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: isDark
-                          ? Colors.grey.shade300
-                          : Colors.grey.shade700,
-                      height: 1.4,
+                    style: tt.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  _permissionCard(
-                    context,
-                    icon: Icons.camera_alt_outlined,
+                  const SizedBox(height: 28),
+                  _PermissionTile(
+                    icon: Icons.camera_alt_rounded,
                     title: 'Camera',
-                    subtitle: 'Scan QR codes quickly.',
+                    subtitle: 'Scan QR codes quickly',
                   ),
-                  const SizedBox(height: 12),
-                  _permissionCard(
-                    context,
-                    icon: Icons.photo_library_outlined,
+                  const SizedBox(height: 8),
+                  _PermissionTile(
+                    icon: Icons.photo_library_rounded,
                     title: 'Photos & Storage',
-                    subtitle: 'Save your generated QR images.',
+                    subtitle: 'Save your generated QR images',
                   ),
-                  const SizedBox(height: 12),
-                  _permissionCard(
-                    context,
-                    icon: Icons.notifications_outlined,
+                  const SizedBox(height: 8),
+                  _PermissionTile(
+                    icon: Icons.notifications_active_rounded,
                     title: 'Notifications',
-                    subtitle: 'Get important updates and alerts.',
+                    subtitle: 'Get important updates and alerts',
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   SizedBox(
                     height: 52,
-                    child: ElevatedButton(
+                    child: FilledButton(
                       onPressed: _isLoading ? null : _requestPermissions,
                       child: _isLoading
                           ? const SizedBox(
@@ -142,9 +142,11 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _isLoading ? null : _skipForNow,
-                    child: const Text('Skip for now'),
+                  Center(
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _skipForNow,
+                      child: const Text('Skip for now'),
+                    ),
                   ),
                 ],
               ),
@@ -154,44 +156,56 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       ),
     );
   }
+}
 
-  Widget _permissionCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+class _PermissionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _PermissionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF171717) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-        ),
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Row(
         children: [
-          Icon(icon, color: isDark ? Colors.indigo.shade200 : Colors.indigo),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: cs.secondaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: cs.onSecondaryContainer, size: 22),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
+                  style: tt.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ],

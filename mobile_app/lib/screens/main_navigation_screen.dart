@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'create_qr_screen.dart';
+import 'create_link_screen.dart';
 import 'dashboard_screen.dart';
 import 'dynamic_links_screen.dart';
 
+/// Top-level scaffold that owns the persistent NavigationBar AND the
+/// Create FAB. Hosting the FAB here (instead of inside each child screen)
+/// guarantees correct positioning above the NavigationBar — the inner
+/// screens were previously placing their FABs in their own Scaffold which
+/// floated them behind the parent's nav bar.
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
-  
+
   const MainNavigationScreen({super.key, this.initialIndex = 0});
 
   @override
@@ -15,9 +21,16 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late int _currentIndex;
 
-  final List<Widget> _screens = const [
-    DashboardScreen(),
-    DynamicLinksScreen(),
+  // Lift refresh callbacks up so the parent FAB can ask the active screen
+  // to reload after a create flow finishes.
+  final GlobalKey<DashboardScreenState> _dashboardKey =
+      GlobalKey<DashboardScreenState>();
+  final GlobalKey<DynamicLinksScreenState> _linksKey =
+      GlobalKey<DynamicLinksScreenState>();
+
+  late final List<Widget> _screens = [
+    DashboardScreen(key: _dashboardKey),
+    DynamicLinksScreen(key: _linksKey),
   ];
 
   @override
@@ -26,10 +39,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     _currentIndex = widget.initialIndex;
   }
 
-  void _onTabTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
+  Future<void> _onCreatePressed() async {
+    if (_currentIndex == 0) {
+      final result = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => const CreateQrScreen(),
+      );
+      if (result == true) _dashboardKey.currentState?.refresh();
+    } else {
+      final result = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => const CreateLinkScreen(),
+      );
+      if (result == true) _linksKey.currentState?.refresh();
+    }
   }
 
   @override
@@ -39,19 +66,34 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         index: _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-        selectedItemColor: Colors.indigo,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code_2),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_primary',
+        icon: Icon(
+          _currentIndex == 0
+              ? Icons.add_rounded
+              : Icons.add_link_rounded,
+        ),
+        label: Text(_currentIndex == 0 ? 'Create QR' : 'Create Link'),
+        onPressed: _onCreatePressed,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (i) {
+          if (i != _currentIndex) {
+            setState(() => _currentIndex = i);
+          }
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.qr_code_2_outlined),
+            selectedIcon: Icon(Icons.qr_code_2_rounded),
             label: 'QR Codes',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.link),
-            label: 'Dynamic Links',
+          NavigationDestination(
+            icon: Icon(Icons.link_outlined),
+            selectedIcon: Icon(Icons.link_rounded),
+            label: 'Links',
           ),
         ],
       ),

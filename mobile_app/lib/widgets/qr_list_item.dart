@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:screenshot/screenshot.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/notification_service.dart';
@@ -23,65 +24,92 @@ class QrListItemWidget extends StatefulWidget {
 }
 
 class _QrListItemWidgetState extends State<QrListItemWidget> {
-  final ScreenshotController _screenshotController = ScreenshotController();
   final _supabase = Supabase.instance.client;
   String _selectedTheme = 'Classic';
   Color _selectedColor = Colors.black;
   Color _selectedEyeColor = Colors.black;
+  bool _expanded = false;
 
-  final List<String> _themes = [
+  static const List<String> _themes = [
     'Classic',
     'Rounded',
     'Thin',
     'Smooth',
     'Circles',
   ];
-  final Map<String, Color> _colors = {
+
+  static const Map<String, Color> _colors = {
     'Black': Colors.black,
-    'Indigo': Colors.indigo,
-    'Emerald': Colors.green,
-    'Rose': Colors.pink,
-    'Amber': Colors.amber,
+    'Indigo': Color(0xFF4F46E5),
+    'Emerald': Color(0xFF10B981),
+    'Rose': Color(0xFFEC4899),
+    'Amber': Color(0xFFF59E0B),
   };
 
   @override
   void initState() {
     super.initState();
-    _loadStyleFromAccount();
+    _loadStyleForThisQr();
   }
 
-  Future<void> _loadStyleFromAccount() async {
-    final user = _supabase.auth.currentUser;
-    final metadata = user?.userMetadata;
-    if (metadata == null) return;
+  /// Load this QR's saved style from its own `design_config` row.
+  /// Falls back to the user-level account metadata for legacy data
+  /// created before per-QR styles existed.
+  Future<void> _loadStyleForThisQr() async {
+    final config = widget.qr['design_config'] as Map<String, dynamic>?;
 
-    final savedTheme = metadata['qr_theme'] as String?;
-    final savedColor = metadata['qr_color'] as String?;
-    final savedEyeColor = metadata['qr_eye_color'] as String?;
+    String? theme;
+    String? color;
+    String? eyeColor;
+
+    if (config != null) {
+      theme = config['theme'] as String?;
+      color = config['color'] as String?;
+      eyeColor = config['eye_color'] as String?;
+    }
+
+    // Legacy fallback to user metadata only when this row has no style yet.
+    if (theme == null && color == null && eyeColor == null) {
+      final metadata = _supabase.auth.currentUser?.userMetadata;
+      if (metadata != null) {
+        theme = metadata['qr_theme'] as String?;
+        color = metadata['qr_color'] as String?;
+        eyeColor = metadata['qr_eye_color'] as String?;
+      }
+    }
 
     if (!mounted) return;
     setState(() {
-      if (savedTheme != null && _themes.contains(savedTheme)) {
-        _selectedTheme = savedTheme;
+      if (theme != null && _themes.contains(theme)) {
+        _selectedTheme = theme;
       }
-      _selectedColor = _hexToColor(savedColor) ?? _selectedColor;
-      _selectedEyeColor = _hexToColor(savedEyeColor) ?? _selectedEyeColor;
+      _selectedColor = _hexToColor(color) ?? _selectedColor;
+      _selectedEyeColor = _hexToColor(eyeColor) ?? _selectedEyeColor;
     });
   }
 
-  Future<void> _saveStyleToAccount() async {
+  /// Persist this QR's style to ITS OWN row's `design_config`.
+  /// We merge with any existing config (e.g. `is_link`) so we never lose
+  /// other flags. This fixes the bug where customizing one QR was changing
+  /// every other QR because we used to write to a single account-wide value.
+  Future<void> _saveStyleForThisQr() async {
     try {
-      await _supabase.auth.updateUser(
-        UserAttributes(
-          data: {
-            'qr_theme': _selectedTheme,
-            'qr_color': _colorToHex(_selectedColor),
-            'qr_eye_color': _colorToHex(_selectedEyeColor),
-          },
-        ),
-      );
+      final existing =
+          (widget.qr['design_config'] as Map<String, dynamic>?) ?? {};
+      final merged = <String, dynamic>{
+        ...existing,
+        'theme': _selectedTheme,
+        'color': _colorToHex(_selectedColor),
+        'eye_color': _colorToHex(_selectedEyeColor),
+      };
+      await _supabase
+          .from('qr_codes')
+          .update({'design_config': merged}).eq('id', widget.qr['id']);
+      // Update the in-memory map so other consumers see the new style without
+      // a full refresh.
+      widget.qr['design_config'] = merged;
     } catch (e) {
-      debugPrint('Failed to save QR style preferences: $e');
+      debugPrint('Failed to save QR style: $e');
     }
   }
 
@@ -102,26 +130,12 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
   QrDataModuleStyle _getModuleStyle() {
     switch (_selectedTheme) {
       case 'Rounded':
-        return QrDataModuleStyle(
-          dataModuleShape: QrDataModuleShape.circle,
-          color: _selectedColor,
-        );
-      case 'Thin':
-        return QrDataModuleStyle(
-          dataModuleShape: QrDataModuleShape.square,
-          color: _selectedColor,
-        );
       case 'Smooth':
-        return QrDataModuleStyle(
-          dataModuleShape: QrDataModuleShape.circle,
-          color: _selectedColor,
-        );
       case 'Circles':
         return QrDataModuleStyle(
           dataModuleShape: QrDataModuleShape.circle,
           color: _selectedColor,
         );
-      case 'Classic':
       default:
         return QrDataModuleStyle(
           dataModuleShape: QrDataModuleShape.square,
@@ -133,22 +147,12 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
   QrEyeStyle _getEyeStyle() {
     switch (_selectedTheme) {
       case 'Rounded':
-        return QrEyeStyle(
-          eyeShape: QrEyeShape.circle,
-          color: _selectedEyeColor,
-        );
       case 'Smooth':
-        return QrEyeStyle(
-          eyeShape: QrEyeShape.circle,
-          color: _selectedEyeColor,
-        );
       case 'Circles':
         return QrEyeStyle(
           eyeShape: QrEyeShape.circle,
           color: _selectedEyeColor,
         );
-      case 'Classic':
-      case 'Thin':
       default:
         return QrEyeStyle(
           eyeShape: QrEyeShape.square,
@@ -158,6 +162,8 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
   }
 
   Future<void> _downloadQr() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final cs = Theme.of(context).colorScheme;
     try {
       final shortUrl = 'https://dynamqr.vercel.app/${widget.qr['short_code']}';
       final painter = QrPainter(
@@ -165,8 +171,6 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
         version: QrVersions.auto,
         eyeStyle: _getEyeStyle(),
         dataModuleStyle: _getModuleStyle(),
-        color: _selectedColor,
-        emptyColor: Colors.white,
       );
 
       final picData = await painter.toImageData(2048);
@@ -179,11 +183,8 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
         );
         if (result['isSuccess']) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('QR Code saved to gallery!'),
-                backgroundColor: Colors.green,
-              ),
+            messenger.showSnackBar(
+              const SnackBar(content: Text('QR Code saved to gallery')),
             );
           }
           await NotificationService().showNotification(
@@ -195,78 +196,103 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
           throw Exception('Failed to save');
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
-            content: Text(
-              'Error saving image. Make sure storage permission is granted.',
+            content: const Text(
+              'Could not save image. Make sure storage permission is granted.',
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: cs.errorContainer,
           ),
         );
       }
     }
   }
 
+  void _shareLink() {
+    final shortUrl = 'https://dynamqr.vercel.app/${widget.qr['short_code']}';
+    SharePlus.instance.share(ShareParams(text: shortUrl));
+  }
+
+  void _copyLink() {
+    final shortUrl = 'https://dynamqr.vercel.app/${widget.qr['short_code']}';
+    Clipboard.setData(ClipboardData(text: shortUrl));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link copied to clipboard')),
+    );
+  }
+
+  void _confirmDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.delete_outline_rounded),
+        title: const Text('Delete this QR Code?'),
+        content: const Text(
+          'This action cannot be undone. The destination link will stop working.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () {
+              Navigator.pop(context);
+              widget.onDelete(widget.qr['id']);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final shortUrl = 'https://dynamqr.vercel.app/${widget.qr['short_code']}';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final keyword = widget.qr['keyword'] ?? widget.qr['short_code'];
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      color: Theme.of(context).cardColor,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Row(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Screenshot(
-                  controller: _screenshotController,
-                  child: GestureDetector(
-                    onTap: () {
-                      context.push(
-                        '/qr_fullscreen',
-                        extra: {
-                          'qrData': widget.qr,
-                          'shortUrl': shortUrl,
-                          'selectedTheme': _selectedTheme,
-                          'selectedColor': _selectedColor,
-                          'selectedEyeColor': _selectedEyeColor,
-                        },
-                      );
-                    },
-                    child: Hero(
-                      tag: 'qr-${widget.qr['id']}',
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade200,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: QrImageView(
-                          data: shortUrl,
-                          version: QrVersions.auto,
-                          size: 100.0,
-                          backgroundColor: Colors.white,
-                          eyeStyle: _getEyeStyle(),
-                          dataModuleStyle: _getModuleStyle(),
-                        ),
+                GestureDetector(
+                  onTap: () {
+                    context.push(
+                      '/qr_fullscreen',
+                      extra: {
+                        'qrData': widget.qr,
+                        'shortUrl': shortUrl,
+                        'selectedTheme': _selectedTheme,
+                        'selectedColor': _selectedColor,
+                        'selectedEyeColor': _selectedEyeColor,
+                      },
+                    );
+                  },
+                  child: Hero(
+                    tag: 'qr-${widget.qr['id']}',
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cs.outlineVariant),
+                      ),
+                      child: QrImageView(
+                        data: shortUrl,
+                        version: QrVersions.auto,
+                        size: 88,
+                        backgroundColor: Colors.white,
+                        eyeStyle: _getEyeStyle(),
+                        dataModuleStyle: _getModuleStyle(),
                       ),
                     ),
                   ),
@@ -277,277 +303,252 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.qr['destination_url'],
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                        widget.qr['destination_url'] ?? '',
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.indigo.shade50,
-                          borderRadius: BorderRadius.circular(8),
+                          color: cs.secondaryContainer,
+                          borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Text(
-                          '/${widget.qr['keyword'] ?? widget.qr['short_code']}',
-                          style: TextStyle(
-                            color: Colors.indigo.shade700,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.link_rounded,
+                              size: 12,
+                              color: cs.onSecondaryContainer,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '/$keyword',
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.onSecondaryContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.download,
-                              size: 20,
-                              color: Colors.indigo,
-                            ),
-                            onPressed: _downloadQr,
-                            constraints: const BoxConstraints(),
-                            padding: const EdgeInsets.all(8),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.edit,
-                              size: 20,
-                              color: Colors.grey,
-                            ),
-                            onPressed: () async {
-                              final result = await context.push(
-                                '/edit',
-                                extra: widget.qr,
-                              );
-                              if (result == true) {
-                                widget.onRefresh();
-                              }
-                            },
-                            constraints: const BoxConstraints(),
-                            padding: const EdgeInsets.all(8),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete,
-                              size: 20,
-                              color: Colors.grey,
-                            ),
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Delete QR Code?'),
-                                  content: const Text(
-                                    'Are you sure you want to delete this QR code? This action cannot be undone.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                        widget.onDelete(widget.qr['id']);
-                                      },
-                                      child: const Text(
-                                        'Delete',
-                                        style: TextStyle(color: Colors.red),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            constraints: const BoxConstraints(),
-                            padding: const EdgeInsets.all(8),
-                          ),
-                        ],
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            const Divider(height: 32),
-            Row(
+          ),
+          // Action row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Row(
               children: [
-                const Text(
-                  'Theme:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _themes.map((theme) {
-                        final isSelected = _selectedTheme == theme;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: ChoiceChip(
-                            label: Text(theme),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              if (selected) {
-                                setState(() {
-                                  _selectedTheme = theme;
-                                });
-                                _saveStyleToAccount();
-                              }
-                            },
-                            selectedColor: isDark
-                                ? Colors.indigo.shade900
-                                : Colors.indigo.shade100,
-                            backgroundColor: isDark
-                                ? Colors.grey.shade900
-                                : Colors.white,
-                            labelStyle: TextStyle(
-                              color: isSelected
-                                  ? (isDark
-                                        ? Colors.white
-                                        : Colors.indigo.shade900)
-                                  : (isDark
-                                        ? Colors.grey.shade300
-                                        : Colors.black87),
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                  child: TextButton.icon(
+                    onPressed: _copyLink,
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copy'),
                   ),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: _shareLink,
+                    icon: const Icon(Icons.share_outlined, size: 18),
+                    label: const Text('Share'),
+                  ),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: _downloadQr,
+                    icon: const Icon(Icons.download_rounded, size: 18),
+                    label: const Text('Save'),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Edit',
+                  onPressed: () async {
+                    final result =
+                        await context.push('/edit', extra: widget.qr);
+                    if (result == true) widget.onRefresh();
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Delete',
+                  onPressed: _confirmDelete,
+                  color: cs.error,
+                  icon: const Icon(Icons.delete_outline_rounded),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Text(
-                  'Color:  ',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _colors.entries.map((entry) {
-                        final colorName = entry.key;
-                        final colorValue = entry.value;
-                        final isSelected = _selectedColor == colorValue;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _selectedColor = colorValue;
-                                // If they were the same, keep them linked unless manually changed
-                                if (_selectedEyeColor == _selectedColor) {
-                                  _selectedEyeColor = colorValue;
-                                }
-                              });
-                              _saveStyleToAccount();
-                            },
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: colorValue,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? Colors.indigo
-                                      : Colors.transparent,
-                                  width: 3,
-                                ),
-                                boxShadow: [
-                                  if (isSelected)
-                                    BoxShadow(
-                                      color: colorValue.withOpacity(0.4),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+          ),
+          // Customize toggle
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.palette_outlined,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Customize',
+                    style: tt.labelLarge?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Text(
-                  'Eye Color:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _colors.entries.map((entry) {
-                        final colorValue = entry.value;
-                        final isSelected = _selectedEyeColor == colorValue;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _selectedEyeColor = colorValue;
-                              });
-                              _saveStyleToAccount();
-                            },
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: colorValue,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? Colors.indigo
-                                      : Colors.transparent,
-                                  width: 3,
-                                ),
-                                boxShadow: [
-                                  if (isSelected)
-                                    BoxShadow(
-                                      color: colorValue.withOpacity(0.4),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                  const Spacer(),
+                  AnimatedRotation(
+                    duration: const Duration(milliseconds: 200),
+                    turns: _expanded ? 0.5 : 0,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: cs.onSurfaceVariant,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ],
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 220),
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _styleLabel(context, 'Style'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _themes.map((theme) {
+                      final selected = _selectedTheme == theme;
+                      return ChoiceChip(
+                        label: Text(theme),
+                        selected: selected,
+                        onSelected: (s) {
+                          if (s) {
+                            setState(() => _selectedTheme = theme);
+                            _saveStyleForThisQr();
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _styleLabel(context, 'Color'),
+                  const SizedBox(height: 8),
+                  _colorRow(
+                    selected: _selectedColor,
+                    onSelected: (c) {
+                      setState(() {
+                        final wasLinked = _selectedEyeColor == _selectedColor;
+                        _selectedColor = c;
+                        if (wasLinked) _selectedEyeColor = c;
+                      });
+                      _saveStyleForThisQr();
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _styleLabel(context, 'Eye color'),
+                  const SizedBox(height: 8),
+                  _colorRow(
+                    selected: _selectedEyeColor,
+                    onSelected: (c) {
+                      setState(() => _selectedEyeColor = c);
+                      _saveStyleForThisQr();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _styleLabel(BuildContext context, String text) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Text(
+      text,
+      style: tt.labelMedium?.copyWith(
+        color: cs.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _colorRow({
+    required Color selected,
+    required ValueChanged<Color> onSelected,
+  }) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: _colors.entries.map((e) {
+        final isSelected = selected == e.value;
+        return _ColorDot(
+          color: e.value,
+          selected: isSelected,
+          onTap: () => onSelected(e.value),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _ColorDot extends StatelessWidget {
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ColorDot({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: selected ? 36 : 32,
+        height: selected ? 36 : 32,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant,
+            width: selected ? 3 : 1,
+          ),
         ),
+        child: selected
+            ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+            : null,
       ),
     );
   }
 }
+

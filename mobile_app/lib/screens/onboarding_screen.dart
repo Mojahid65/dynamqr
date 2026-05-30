@@ -15,37 +15,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<Map<String, dynamic>> _onboardingData = [
-    {
-      'title': 'Dynamic QR Codes',
-      'description':
-          'Create QR codes that can be updated anytime without reprinting.',
-      'icon': Icons.qr_code_scanner,
-      'color': Colors.indigo,
-    },
-    {
-      'title': 'Advanced Customization',
-      'description':
-          'Customize themes, colors, and shapes to match your brand.',
-      'icon': Icons.color_lens,
-      'color': Colors.pink,
-    },
-    {
-      'title': 'High Quality Export',
-      'description':
-          'Download and export your QR codes in ultra-high resolution for professional printing.',
-      'icon': Icons.high_quality,
-      'color': Colors.amber,
-    },
+  static const List<_Slide> _slides = [
+    _Slide(
+      title: 'Dynamic QR Codes',
+      description:
+          'Create QR codes you can update anytime, without ever reprinting.',
+      icon: Icons.qr_code_scanner_rounded,
+    ),
+    _Slide(
+      title: 'Beautiful Customization',
+      description:
+          'Style your codes with custom themes, colors, and shapes.',
+      icon: Icons.palette_outlined,
+    ),
+    _Slide(
+      title: 'Print-Ready Exports',
+      description:
+          'Export ultra high-resolution QR codes ready for any print or digital use.',
+      icon: Icons.high_quality_rounded,
+    ),
   ];
 
   Future<void> _completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('has_completed_onboarding', true);
     widget.onCompleted?.call();
-    if (mounted) {
-      context.go('/login');
-    }
+    if (mounted) context.go('/login');
   }
 
   @override
@@ -56,61 +51,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final isLast = _currentPage == _slides.length - 1;
 
     return Scaffold(
-      // Use AMOLED black if dark mode
-      backgroundColor: isDark ? Colors.black : Colors.white,
       body: SafeArea(
         child: Column(
           children: [
+            Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 8, 16, 0),
+                child: TextButton(
+                  onPressed: _completeOnboarding,
+                  child: const Text('Skip'),
+                ),
+              ),
+            ),
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                },
-                itemCount: _onboardingData.length,
+                onPageChanged: (i) => setState(() => _currentPage = i),
+                itemCount: _slides.length,
                 itemBuilder: (context, index) {
-                  final data = _onboardingData[index];
+                  final slide = _slides[index];
                   return Padding(
-                    padding: const EdgeInsets.all(40.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(32),
+                          width: 200,
+                          height: 200,
                           decoration: BoxDecoration(
-                            color: data['color'].withOpacity(0.1),
-                            shape: BoxShape.circle,
+                            color: cs.primaryContainer,
+                            borderRadius: BorderRadius.circular(48),
                           ),
                           child: Icon(
-                            data['icon'],
-                            size: 100,
-                            color: data['color'],
+                            slide.icon,
+                            size: 96,
+                            color: cs.onPrimaryContainer,
                           ),
                         ),
-                        const SizedBox(height: 60),
+                        const SizedBox(height: 56),
                         Text(
-                          data['title'],
+                          slide.title,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black87,
+                          style: tt.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.5,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         Text(
-                          data['description'],
+                          slide.description,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: isDark
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600,
+                          style: tt.bodyLarge?.copyWith(
+                            color: cs.onSurfaceVariant,
                             height: 1.5,
                           ),
                         ),
@@ -121,61 +119,57 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(32.0),
+              padding: const EdgeInsets.symmetric(vertical: 24),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: List.generate(
-                      _onboardingData.length,
-                      (index) => Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        width: _currentPage == index ? 24 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: _currentPage == index
-                              ? _onboardingData[_currentPage]['color']
-                              : (isDark
-                                    ? Colors.grey.shade800
-                                    : Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _slides.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 28 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index
+                          ? cs.primary
+                          : cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_currentPage == _onboardingData.length - 1) {
-                        _completeOnboarding();
-                      } else {
-                        _pageController.nextPage(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _onboardingData[_currentPage]['color'],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                    child: Text(
-                      _currentPage == _onboardingData.length - 1
-                          ? 'Get Started'
-                          : 'Next',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    if (isLast) {
+                      _completeOnboarding();
+                    } else {
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                      );
+                    }
+                  },
+                  icon: Icon(
+                    isLast
+                        ? Icons.check_rounded
+                        : Icons.arrow_forward_rounded,
+                    size: 20,
+                  ),
+                  label: Text(
+                    isLast ? 'Get Started' : 'Next',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ],
@@ -183,4 +177,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     );
   }
+}
+
+class _Slide {
+  final String title;
+  final String description;
+  final IconData icon;
+
+  const _Slide({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
 }

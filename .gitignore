@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+# Local MCP config — contains a Supabase personal access token
+.kiro/settings/mcp.json

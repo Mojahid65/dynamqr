@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
-import '../core/constants.dart';
+import '../core/google_auth_service.dart';
 import '../widgets/qr_list_item.dart';
 import 'scanner_screen.dart';
-import 'create_qr_screen.dart';
 import 'about_screen.dart';
+import 'donate_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_screen.dart';
 import 'package:provider/provider.dart';
@@ -19,30 +17,37 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() => DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class DashboardScreenState extends State<DashboardScreen> {
   final _supabase = Supabase.instance.client;
+  final _searchController = SearchController();
   List<dynamic> _qrCodes = [];
+  String _searchQuery = '';
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _fetchQRCodes();
-    
-    // Check for updates shortly after screen loads
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService().checkForUpdates(context);
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchQRCodes() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
-      
+
       final data = await _supabase
           .from('qr_codes')
           .select()
@@ -62,236 +67,598 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Public refresh hook used by the parent NavigationScreen's FAB.
+  void refresh() => _fetchQRCodes();
+
   Future<void> _signOut() async {
-    await _supabase.auth.signOut();
+    // Disconnect Google + Supabase together so a future "Continue with
+    // Google" flow re-shows the chooser instead of silently restoring
+    // the session the user just signed out of.
+    await GoogleAuthService.instance.signOut(supabase: _supabase);
     if (mounted) context.go('/login');
   }
 
   Future<void> _deleteQrCode(String id) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final cs = Theme.of(context).colorScheme;
     try {
       await _supabase.from('qr_codes').delete().eq('id', id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('QR Code deleted'), backgroundColor: Colors.green),
+        messenger.showSnackBar(
+          const SnackBar(content: Text('QR Code deleted')),
         );
         _fetchQRCodes();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete QR Code: $e'), backgroundColor: Colors.red),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete: $e'),
+            backgroundColor: cs.errorContainer,
+          ),
         );
       }
     }
   }
 
-  // Removed _showAboutDialog as we now use AboutScreen
+  List<dynamic> get _filteredQrCodes {
+    if (_searchQuery.isEmpty) return _qrCodes;
+    final q = _searchQuery.toLowerCase();
+    return _qrCodes.where((qr) {
+      final url = (qr['destination_url'] ?? '').toString().toLowerCase();
+      final keyword = (qr['keyword'] ?? '').toString().toLowerCase();
+      final code = (qr['short_code'] ?? '').toString().toLowerCase();
+      return url.contains(q) || keyword.contains(q) || code.contains(q);
+    }).toList();
+  }
 
-  Widget _buildDrawer() {
+  Widget _buildDrawer(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final user = _supabase.auth.currentUser;
+    final email = user?.email ?? 'Guest';
+    final initial =
+        email.isNotEmpty ? email.characters.first.toUpperCase() : '?';
+
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.indigo,
+      child: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 24, 16, 16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: cs.primaryContainer,
+                    child: Text(
+                      initial,
+                      style: tt.titleMedium?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'DynamQR',
+                          style: tt.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          email,
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Icon(Icons.qr_code_scanner, size: 48, color: Colors.white),
-                SizedBox(height: 8),
-                Text(
-                  'DynamQR',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+            const Divider(indent: 28, endIndent: 28, height: 1),
+            const SizedBox(height: 8),
+            _DrawerTile(
+              icon: Icons.home_rounded,
+              label: 'Home',
+              selected: true,
+              onTap: () => Navigator.pop(context),
+            ),
+            _DrawerTile(
+              icon: Icons.info_outline_rounded,
+              label: 'About Developer',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                );
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.favorite_outline_rounded,
+              iconColor: cs.tertiary,
+              label: 'Donate',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DonateScreen()),
+                );
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.share_outlined,
+              label: 'Share App',
+              onTap: () {
+                Navigator.pop(context);
+                SharePlus.instance.share(ShareParams(
+                  text:
+                      'Check out DynamQR, the smartest way to manage dynamic QR codes! https://dynamqr.vercel.app',
+                ));
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 16, 28, 8),
+              child: Text(
+                'LEGAL',
+                style: tt.labelSmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            _DrawerTile(
+              icon: Icons.privacy_tip_outlined,
+              label: 'Privacy Policy',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const PrivacyPolicyScreen()),
+                );
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.description_outlined,
+              label: 'Terms of Service',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TermsScreen()),
+                );
+              },
+            ),
+            const Divider(indent: 28, endIndent: 28, height: 24),
+            Consumer<ThemeProvider>(
+              builder: (context, tp, _) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 0, 28, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'APPEARANCE',
+                        style: tt.labelSmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Subtitle showing current selection so it never
+                      // looks ambiguous with icon-only segments.
+                      Text(
+                        switch (tp.themeMode) {
+                          ThemeMode.light => 'Light mode',
+                          ThemeMode.dark => 'Dark mode',
+                          ThemeMode.system => 'System default',
+                        },
+                        style: tt.bodySmall
+                            ?.copyWith(color: cs.onSurface),
+                      ),
+                      const SizedBox(height: 12),
+                      // Icon-only segmented control to avoid label
+                      // truncation/overflow inside the narrow drawer.
+                      Center(
+                        child: SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              icon: Icon(Icons.light_mode_outlined),
+                              tooltip: 'Light',
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.system,
+                              icon: Icon(Icons.brightness_auto_outlined),
+                              tooltip: 'System',
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              icon: Icon(Icons.dark_mode_outlined),
+                              tooltip: 'Dark',
+                            ),
+                          ],
+                          selected: {tp.themeMode},
+                          onSelectionChanged: (s) =>
+                              tp.setTheme(s.first),
+                          style: ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            padding: const WidgetStatePropertyAll(
+                              EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _signOut();
+                  },
+                  icon: Icon(Icons.logout_rounded, color: cs.error),
+                  label: Text(
+                    'Log Out',
+                    style: TextStyle(color: cs.error),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.home),
-            title: const Text('Home'),
-            onTap: () {
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('About Developer'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const AboutScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.favorite_border, color: Colors.pink),
-            title: const Text('Donate'),
-            onTap: () async {
-              Navigator.pop(context);
-              final url = Uri.parse('https://www.mojahidhassan.in/donate');
-              try {
-                await launchUrl(url, mode: LaunchMode.externalApplication);
-              } catch (e) {
-                debugPrint('Could not launch donate url: $e');
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.share),
-            title: const Text('Share App'),
-            onTap: () {
-              Navigator.pop(context);
-              Share.share('Check out DynamQR, the smartest way to manage dynamic QR codes! https://dynamqr.vercel.app');
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined),
-            title: const Text('Privacy Policy'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.description_outlined),
-            title: const Text('Terms of Service'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsScreen()));
-            },
-          ),
-          const Divider(),
-          Consumer<ThemeProvider>(
-            builder: (context, themeProvider, child) {
-              return ListTile(
-                leading: Icon(
-                  themeProvider.themeMode == ThemeMode.dark ? Icons.dark_mode :
-                  themeProvider.themeMode == ThemeMode.light ? Icons.light_mode : Icons.brightness_auto,
-                ),
-                title: const Text('Theme'),
-                subtitle: Text(
-                  themeProvider.themeMode == ThemeMode.dark ? 'Dark Mode' :
-                  themeProvider.themeMode == ThemeMode.light ? 'Light Mode' : 'System Default',
-                ),
-                trailing: PopupMenuButton<ThemeMode>(
-                  onSelected: (mode) => themeProvider.setTheme(mode),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: ThemeMode.system, child: Text('System Default')),
-                    PopupMenuItem(value: ThemeMode.light, child: Text('Light Mode')),
-                    PopupMenuItem(value: ThemeMode.dark, child: Text('Dark Mode')),
-                  ],
-                ),
-              );
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Log Out', style: TextStyle(color: Colors.red)),
-            onTap: () {
-              Navigator.pop(context);
-              _signOut();
-            },
-          ),
-        ],
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final filtered = _filteredQrCodes;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('DynamQR', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _signOut,
-          ),
-        ],
-      ),
-      drawer: _buildDrawer(),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _qrCodes.isEmpty
-              ? _buildEmptyState()
-              : _buildList(),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'scan_qr',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ScannerScreen()),
-              );
-            },
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan QR'),
-            backgroundColor: isDark ? Colors.grey.shade900 : Colors.white,
-            foregroundColor: isDark ? Colors.indigo.shade200 : Colors.indigo,
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton.extended(
-            heroTag: 'create_qr',
-            onPressed: () async {
-              final result = await showModalBottomSheet<bool>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => const CreateQrScreen(),
-              );
-              if (result == true) {
-                _fetchQRCodes();
-              }
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Create QR'),
-            backgroundColor: Colors.indigo,
-            foregroundColor: Colors.white,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.qr_code_scanner, size: 80, color: Colors.indigo.shade200),
-          const SizedBox(height: 16),
-          const Text('No QR codes yet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Create your first dynamic QR code\nto start sharing links.'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _qrCodes.length,
-      itemBuilder: (context, index) {
-        final qr = _qrCodes[index];
-        return QrListItemWidget(
-          qr: qr,
+      drawer: _buildDrawer(context),
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
           onRefresh: _fetchQRCodes,
-          onDelete: _deleteQrCode,
-        );
-      },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverAppBar.large(
+                pinned: true,
+                title: const Text('Your QR Codes'),
+                actions: [
+                  IconButton(
+                    tooltip: 'Scan',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ScannerScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                  ),
+                ],
+              ),
+              SliverToBoxAdapter(child: _buildSummaryCard(context)),
+              SliverToBoxAdapter(child: _buildSearchBar(context)),
+              if (_isLoading)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 80),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                )
+              else if (filtered.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _EmptyState(
+                    icon: _searchQuery.isNotEmpty
+                        ? Icons.search_off_rounded
+                        : Icons.qr_code_2_outlined,
+                    title: _searchQuery.isNotEmpty
+                        ? 'No matches'
+                        : 'No QR codes yet',
+                    description: _searchQuery.isNotEmpty
+                        ? 'Try a different keyword.'
+                        : 'Tap "Create QR" to make your first dynamic QR code.',
+                  ),
+                )
+              else ...[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: Row(
+                      children: [
+                        Text(
+                          '${filtered.length} ${filtered.length == 1 ? 'code' : 'codes'}',
+                          style: tt.labelLarge?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                  sliver: SliverList.separated(
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final qr = filtered[index];
+                      return QrListItemWidget(
+                        qr: qr,
+                        onRefresh: _fetchQRCodes,
+                        onDelete: _deleteQrCode,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: null,
+    );
+  }
+
+  Widget _buildSummaryCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final total = _qrCodes.length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cs.primaryContainer,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.qr_code_2_rounded,
+                color: cs.onPrimaryContainer,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total QR Codes',
+                    style: tt.labelLarge?.copyWith(
+                      color: cs.onPrimaryContainer.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$total',
+                    style: tt.displaySmall?.copyWith(
+                      color: cs.onPrimaryContainer,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -1,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    total == 0
+                        ? 'Tap "Create QR" to get started'
+                        : 'Manage and customize your codes',
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onPrimaryContainer.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: SearchAnchor.bar(
+        searchController: _searchController,
+        barHintText: 'Search by URL, keyword, or code',
+        barElevation: const WidgetStatePropertyAll(0),
+        barLeading: const Icon(Icons.search_rounded),
+        barTrailing: _searchQuery.isNotEmpty
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+              ]
+            : const [],
+        onChanged: (q) => setState(() => _searchQuery = q),
+        suggestionsBuilder: (context, controller) {
+          final query = controller.text.toLowerCase();
+          final results = _qrCodes.where((qr) {
+            final url = (qr['destination_url'] ?? '').toString().toLowerCase();
+            final keyword = (qr['keyword'] ?? '').toString().toLowerCase();
+            final code = (qr['short_code'] ?? '').toString().toLowerCase();
+            return url.contains(query) ||
+                keyword.contains(query) ||
+                code.contains(query);
+          }).take(8);
+          return [
+            for (final qr in results)
+              ListTile(
+                leading: const Icon(Icons.qr_code_2_outlined),
+                title: Text(qr['destination_url'] ?? '',
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text('/${qr['keyword'] ?? qr['short_code']}'),
+                onTap: () {
+                  controller.closeView(qr['destination_url']);
+                  setState(() => _searchQuery = qr['destination_url']);
+                },
+              ),
+          ];
+        },
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 56, 32, 80),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 56, color: cs.onPrimaryContainer),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            title,
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: tt.bodyMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _DrawerTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+  final Color? iconColor;
+
+  const _DrawerTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: selected ? cs.secondaryContainer : Colors.transparent,
+        borderRadius: BorderRadius.circular(28),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: onTap,
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 22,
+                  color: selected
+                      ? cs.onSecondaryContainer
+                      : (iconColor ?? cs.onSurfaceVariant),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    label,
+                    style:
+                        Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: selected
+                                  ? cs.onSecondaryContainer
+                                  : cs.onSurface,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

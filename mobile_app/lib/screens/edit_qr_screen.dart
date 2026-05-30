@@ -20,33 +20,39 @@ class _EditQrScreenState extends State<EditQrScreen> {
   @override
   void initState() {
     super.initState();
-    _destinationUrlController = TextEditingController(text: widget.qrData['destination_url']);
-    _keywordController = TextEditingController(text: widget.qrData['keyword'] ?? widget.qrData['short_code']);
+    _destinationUrlController =
+        TextEditingController(text: widget.qrData['destination_url']);
+    _keywordController = TextEditingController(
+      text: widget.qrData['keyword'] ?? widget.qrData['short_code'],
+    );
   }
 
   Future<void> _updateQrCode() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
+    final cs = Theme.of(context).colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final keyword = _keywordController.text.trim();
-
       await Supabase.instance.client.from('qr_codes').update({
         'destination_url': _destinationUrlController.text.trim(),
         'keyword': keyword.isNotEmpty ? keyword : null,
       }).eq('id', widget.qrData['id']);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('QR Code updated successfully!'), backgroundColor: Colors.green),
+        messenger.showSnackBar(
+          const SnackBar(content: Text('QR Code updated')),
         );
-        context.pop(true); // Return true to trigger reload
+        context.pop(true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update QR Code: $e'), backgroundColor: Colors.red),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to update: $e'),
+            backgroundColor: cs.errorContainer,
+          ),
         );
       }
     } finally {
@@ -63,94 +69,113 @@ class _EditQrScreenState extends State<EditQrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final keywordEditable = widget.qrData['keyword'] != null;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Dynamic QR'),
+        title: const Text('Edit QR Code'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Container(
-          padding: const EdgeInsets.all(24.0),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Update QR Code Details',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(28),
                 ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _destinationUrlController,
-                  decoration: const InputDecoration(
-                    labelText: 'Destination URL *',
-                    hintText: 'https://example.com',
-                    prefixIcon: Icon(Icons.link),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.edit_rounded,
+                        color: cs.onPrimaryContainer,
+                        size: 22,
+                      ),
                     ),
-                  ),
-                  keyboardType: TextInputType.url,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Destination URL is required';
-                    }
-                    if (!value.trim().startsWith('http://') && !value.trim().startsWith('https://')) {
-                      return 'URL must start with http:// or https://';
-                    }
-                    return null;
-                  },
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Update QR Details',
+                            style: tt.titleMedium?.copyWith(
+                              color: cs.onPrimaryContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Code: /${widget.qrData['short_code']}',
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onPrimaryContainer
+                                  .withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _keywordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Custom Keyword',
-                    hintText: 'e.g., my-campaign',
-                    prefixIcon: Icon(Icons.short_text),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
-                  ),
-                  readOnly: widget.qrData['keyword'] == null, // Maybe only editable if it had one, or allow adding it
-                  enabled: widget.qrData['keyword'] != null,
-                  // Note: It's better to allow them to edit the keyword if it exists, or just let them change the destination. We'll disable it for simplicity or if they generated a random short code.
-                  // For a dynamic QR, usually you update the destination, but the keyword/shortcode is fixed. 
-                  // Let's actually disable the keyword edit to prevent breaking existing printed QR codes.
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _destinationUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Destination URL',
+                  hintText: 'https://example.com',
+                  prefixIcon: Icon(Icons.link_rounded),
                 ),
-                if (widget.qrData['keyword'] == null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      'Short code (${widget.qrData['short_code']}) cannot be changed.',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                    ),
-                  ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _updateQrCode,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                keyboardType: TextInputType.url,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Destination URL is required';
+                  }
+                  if (!value.trim().startsWith('http://') &&
+                      !value.trim().startsWith('https://')) {
+                    return 'URL must start with http:// or https://';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _keywordController,
+                decoration: InputDecoration(
+                  labelText: 'Custom keyword',
+                  hintText: 'e.g. my-campaign',
+                  prefixIcon: const Icon(Icons.tag_rounded),
+                  helperText: keywordEditable
+                      ? null
+                      : 'Short code cannot be changed once generated',
                 ),
-              ],
-            ),
+                readOnly: !keywordEditable,
+                enabled: keywordEditable,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _isLoading ? null : _updateQrCode,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save Changes'),
+              ),
+            ],
           ),
         ),
       ),

@@ -20,7 +20,11 @@ class _CreateQrScreenState extends State<CreateQrScreen> {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final random = Random();
     final suffix = String.fromCharCodes(
-        Iterable.generate(4, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
+      Iterable.generate(
+        4,
+        (_) => chars.codeUnitAt(random.nextInt(chars.length)),
+      ),
+    );
     return 'moja$suffix';
   }
 
@@ -28,12 +32,13 @@ class _CreateQrScreenState extends State<CreateQrScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
       final keyword = _keywordController.text.trim();
 
-      // Retry up to 5 times on the rare chance the random short code collides
       bool inserted = false;
       for (int attempt = 0; attempt < 5; attempt++) {
         final shortCode = _generateShortCode();
@@ -45,26 +50,29 @@ class _CreateQrScreenState extends State<CreateQrScreen> {
             if (keyword.isNotEmpty) 'keyword': keyword,
           });
           inserted = true;
-          break; // success — stop retrying
+          break;
         } on PostgrestException catch (e) {
-          if (e.code == '23505') {
-            continue; // duplicate key for random short code — retry
-          }
+          if (e.code == '23505') continue;
           rethrow;
         }
       }
-      if (!inserted) throw Exception('Could not generate a unique code. Please try again.');
+      if (!inserted) {
+        throw Exception('Could not generate a unique code. Please try again.');
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('QR Code created successfully!'), backgroundColor: Colors.green),
+        messenger.showSnackBar(
+          const SnackBar(content: Text('QR Code created')),
         );
-        context.pop(true); // Return true to indicate success and trigger reload
+        context.pop(true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create QR Code: $e'), backgroundColor: Colors.red),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to create: $e'),
+            backgroundColor: cs.errorContainer,
+          ),
         );
       }
     } finally {
@@ -81,118 +89,128 @@ class _CreateQrScreenState extends State<CreateQrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Form(
+          key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade600,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Create Dynamic QR', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.qr_code_2_rounded,
+                      color: cs.onPrimaryContainer,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Create Dynamic QR',
+                          style: tt.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Update the destination anytime',
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
+              TextFormField(
+                controller: _destinationUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Destination URL',
+                  hintText: 'https://example.com',
+                  prefixIcon: Icon(Icons.link_rounded),
+                ),
+                keyboardType: TextInputType.url,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Destination URL is required';
+                  }
+                  if (!value.trim().startsWith('http://') &&
+                      !value.trim().startsWith('https://')) {
+                    return 'URL must start with http:// or https://';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _keywordController,
+                decoration: const InputDecoration(
+                  labelText: 'Custom keyword (optional)',
+                  hintText: 'e.g. my-campaign',
+                  prefixIcon: Icon(Icons.tag_rounded),
+                ),
+              ),
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'QR Code Details',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _destinationUrlController,
-                  decoration: const InputDecoration(
-                    labelText: 'Destination URL *',
-                    hintText: 'https://example.com',
-                    prefixIcon: Icon(Icons.link),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: cs.onSecondaryContainer,
                     ),
-                  ),
-                  keyboardType: TextInputType.url,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Destination URL is required';
-                    }
-                    if (!value.trim().startsWith('http://') && !value.trim().startsWith('https://')) {
-                      return 'URL must start with http:// or https://';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _keywordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Custom Keyword (Optional)',
-                    hintText: 'e.g., my-campaign',
-                    prefixIcon: Icon(Icons.short_text),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Change the destination URL anytime without reprinting your QR code.',
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSecondaryContainer,
+                          height: 1.4,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _createQrCode,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Create QR Code', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _isLoading ? null : _createQrCode,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Create QR Code'),
+              ),
+            ],
           ),
         ),
-      ],
-    ),
-  ),
-),
-);
-}
+      ),
+    );
+  }
 }

@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /landing
+Allow: /privacy
+Allow: /privacy-policy
+Allow: /terms
+Allow: /terms-of-service
+Allow: /data-deletion
+Allow: /account-deletion
+Allow: /support
+Allow: /help
+Allow: /about
+
+# Authenticated app routes — index only the landing/legal pages
+Disallow: /
+Disallow: /login
+Disallow: /register
+Disallow: /admin
+Disallow: /create
+
+Sitemap: https://dynamqr.vercel.app/sitemap.xml

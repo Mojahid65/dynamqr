@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:share_plus/share_plus.dart';
 
 class QrFullscreenScreen extends StatefulWidget {
   final Map<String, dynamic> qrData;
@@ -28,73 +30,74 @@ class _QrFullscreenScreenState extends State<QrFullscreenScreen> {
   QrDataModuleStyle _getModuleStyle() {
     switch (widget.selectedTheme) {
       case 'Rounded':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: widget.selectedColor);
-      case 'Thin':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: widget.selectedColor);
       case 'Smooth':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: widget.selectedColor);
       case 'Circles':
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: widget.selectedColor);
-      case 'Classic':
+        return QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.circle,
+          color: widget.selectedColor,
+        );
       default:
-        return QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: widget.selectedColor);
+        return QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: widget.selectedColor,
+        );
     }
   }
 
   QrEyeStyle _getEyeStyle() {
     switch (widget.selectedTheme) {
       case 'Rounded':
-        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: widget.selectedEyeColor);
       case 'Smooth':
-        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: widget.selectedEyeColor);
       case 'Circles':
-        return QrEyeStyle(eyeShape: QrEyeShape.circle, color: widget.selectedEyeColor);
-      case 'Classic':
-      case 'Thin':
+        return QrEyeStyle(
+          eyeShape: QrEyeShape.circle,
+          color: widget.selectedEyeColor,
+        );
       default:
-        return QrEyeStyle(eyeShape: QrEyeShape.square, color: widget.selectedEyeColor);
+        return QrEyeStyle(
+          eyeShape: QrEyeShape.square,
+          color: widget.selectedEyeColor,
+        );
     }
   }
 
   Future<void> _exportHighQuality() async {
     setState(() => _isExporting = true);
+    final cs = Theme.of(context).colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final painter = QrPainter(
         data: widget.shortUrl,
         version: QrVersions.auto,
         eyeStyle: _getEyeStyle(),
         dataModuleStyle: _getModuleStyle(),
-        color: widget.selectedColor,
-        emptyColor: Colors.white,
       );
-      
-      // Export at extremely high resolution for printing (4096px)
+
       final picData = await painter.toImageData(4096);
       if (picData != null) {
         final result = await ImageGallerySaverPlus.saveImage(
           picData.buffer.asUint8List(),
           quality: 100,
-          name: "QR_HighRes_${widget.qrData['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
+          name:
+              "QR_HighRes_${widget.qrData['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
         );
         if (result['isSuccess'] && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             const SnackBar(
-              content: Text('High Quality QR Code saved to gallery!'), 
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
+              content: Text('High Quality QR Code saved to gallery'),
             ),
           );
         } else {
           throw Exception('Failed to save');
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
-            content: Text('Error saving image. Ensure storage permissions are granted.'), 
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+            content: const Text(
+                'Could not save image. Ensure storage permissions are granted.'),
+            backgroundColor: cs.errorContainer,
           ),
         );
       }
@@ -103,74 +106,147 @@ class _QrFullscreenScreenState extends State<QrFullscreenScreen> {
     }
   }
 
+  void _copyLink() {
+    Clipboard.setData(ClipboardData(text: widget.shortUrl));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link copied to clipboard')),
+    );
+  }
+
+  void _shareLink() => SharePlus.instance.share(
+        ShareParams(text: widget.shortUrl),
+      );
+
   @override
   Widget build(BuildContext context) {
-    // We force a dark background for the fullscreen view or use scaffold background.
-    // The QR code itself remains on a white background for scanability.
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black, // AMOLED dark background
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('QR Code', style: TextStyle(color: Colors.white)),
+        title: const Text('QR Code'),
+        actions: [
+          IconButton(
+            tooltip: 'Share',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: _shareLink,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: Center(
-                child: Hero(
-                  tag: 'qr-${widget.qrData['id']}',
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white, // Keep QR background white
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: QrImageView(
-                      data: widget.shortUrl,
-                      version: QrVersions.auto,
-                      size: MediaQuery.of(context).size.width * 0.8,
-                      backgroundColor: Colors.white,
-                      eyeStyle: _getEyeStyle(),
-                      dataModuleStyle: _getModuleStyle(),
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Hero(
+                        tag: 'qr-${widget.qrData['id']}',
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: cs.shadow.withValues(alpha: 0.1),
+                                blurRadius: 32,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: QrImageView(
+                            data: widget.shortUrl,
+                            version: QrVersions.auto,
+                            size:
+                                MediaQuery.of(context).size.width * 0.72,
+                            backgroundColor: Colors.white,
+                            eyeStyle: _getEyeStyle(),
+                            dataModuleStyle: _getModuleStyle(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.secondaryContainer,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.link_rounded,
+                              size: 14,
+                              color: cs.onSecondaryContainer,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.shortUrl,
+                              style: tt.labelMedium?.copyWith(
+                                color: cs.onSecondaryContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        widget.qrData['destination_url'] ?? '',
+                        style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(32.0),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               child: Column(
                 children: [
-                  Text(
-                    widget.qrData['destination_url'],
-                    style: const TextStyle(color: Colors.white70, fontSize: 16),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
-                    child: ElevatedButton.icon(
+                    child: FilledButton.icon(
                       onPressed: _isExporting ? null : _exportHighQuality,
-                      icon: _isExporting 
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Icon(Icons.high_quality, size: 28),
+                      icon: _isExporting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.high_quality_rounded),
                       label: Text(
-                        _isExporting ? 'Exporting...' : 'Export High Quality',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        _isExporting
+                            ? 'Exporting...'
+                            : 'Export High Quality',
+                        style: const TextStyle(fontSize: 15),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: widget.selectedColor,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: _copyLink,
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      label: const Text('Copy Link'),
                     ),
                   ),
                 ],

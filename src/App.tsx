@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import Login from './pages/Login';
@@ -8,6 +7,11 @@ import CreateQR from './pages/CreateQR';
 import Admin from './pages/Admin';
 import Redirect from './pages/Redirect';
 import Landing from './pages/Landing';
+import PrivacyPolicy from './pages/legal/PrivacyPolicy';
+import Terms from './pages/legal/Terms';
+import DataDeletion from './pages/legal/DataDeletion';
+import Support from './pages/legal/Support';
+import About from './pages/legal/About';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { session } = useAuth();
@@ -26,6 +30,21 @@ function App() {
             <Route path="/landing" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+
+            {/* Public legal & info pages — REQUIRED to remain public so
+                Google Play Console, App Store, and email recipients can
+                resolve them without auth. Do NOT wrap these in
+                PrivateRoute. */}
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/terms-of-service" element={<Navigate to="/terms" replace />} />
+            <Route path="/data-deletion" element={<DataDeletion />} />
+            <Route path="/account-deletion" element={<Navigate to="/data-deletion" replace />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/help" element={<Navigate to="/support" replace />} />
+            <Route path="/about" element={<About />} />
+
             <Route path="/" element={
               <PrivateRoute>
                 <Dashboard />
