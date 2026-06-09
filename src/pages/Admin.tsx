@@ -3,8 +3,9 @@ import { useAuth } from '../components/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { 
   LogOut, ArrowLeft, Check, X, ShieldAlert, Users, Search, Bell, Activity, 
-  Smartphone, AlertTriangle, UploadCloud, Send, CheckSquare, Square, Menu,
-  Settings, LayoutDashboard, RefreshCw, SmartphoneNfc, Plus, Image as ImageIcon
+  AlertTriangle, UploadCloud, Send, CheckSquare, Square, Menu,
+  Settings, LayoutDashboard, RefreshCw, SmartphoneNfc, Image as ImageIcon,
+  Home, X as CloseIcon
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -33,7 +34,6 @@ const Admin = () => {
   const [updates, setUpdates] = useState<AppUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -66,7 +66,7 @@ const Admin = () => {
 
     if (updatesError) {
       if (updatesError.code === '42P01') {
-        setError("The 'app_updates' table does not exist. Please run the SQL script in your Supabase dashboard.");
+        console.error("The 'app_updates' table does not exist. Please run the SQL script in your Supabase dashboard.");
       } else {
         console.error('Error fetching updates:', updatesError);
       }
@@ -238,7 +238,6 @@ const Admin = () => {
   }
 
   const totalUsers = profiles.length;
-  const bannedUsers = profiles.filter(p => p.is_banned).length;
   const pushEnabledUsers = profiles.filter(p => p.push_token).length;
   const totalUpdates = updates.length;
 
