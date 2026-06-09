@@ -6,6 +6,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/notification_service.dart';
+import 'dart:ui' as ui;
+import 'package:image/image.dart' as img_lib;
 
 class QrListItemWidget extends StatefulWidget {
   final Map<String, dynamic> qr;
@@ -173,13 +175,39 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
         dataModuleStyle: _getModuleStyle(),
       );
 
-      final picData = await painter.toImageData(2048);
-      if (picData != null) {
+      final picData = await painter.toImageData(2048); // We keep painter instance
+      
+      // Render the QR code on a solid white background canvas
+      final size = 2048.0;
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final bgPaint = Paint()..color = Colors.white;
+      canvas.drawRect(Rect.fromLTWH(0, 0, size, size), bgPaint);
+
+      final quietZone = size * 0.08;
+      final qrSize = size - (quietZone * 2);
+      canvas.save();
+      canvas.translate(quietZone, quietZone);
+      painter.paint(canvas, Size(qrSize, qrSize));
+      canvas.restore();
+
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(size.toInt(), size.toInt());
+      final pngData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (pngData != null) {
+        final pngBytes = pngData.buffer.asUint8List();
+        
+        // Convert PNG to JPG
+        final decodedImage = img_lib.decodePng(pngBytes);
+        if (decodedImage == null) throw Exception('Failed to decode PNG');
+        final jpgBytes = img_lib.encodeJpg(decodedImage, quality: 100);
+
         final result = await ImageGallerySaverPlus.saveImage(
-          picData.buffer.asUint8List(),
+          jpgBytes,
           quality: 100,
           name:
-              "QR_${widget.qr['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
+              "QR_${widget.qr['short_code']}_${DateTime.now().millisecondsSinceEpoch}.jpg",
         );
         if (result['isSuccess']) {
           if (mounted) {
@@ -352,22 +380,73 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: _copyLink,
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    label: const Text('Copy'),
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Copy',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: _shareLink,
-                    icon: const Icon(Icons.share_outlined, size: 18),
-                    label: const Text('Share'),
+                    icon: const Icon(Icons.share_outlined, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Share',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: _downloadQr,
-                    icon: const Icon(Icons.download_rounded, size: 18),
-                    label: const Text('Save'),
+                    icon: const Icon(Icons.download_rounded, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Save',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => context.push('/analytics', extra: widget.qr),
+                    icon: const Icon(Icons.analytics_outlined, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Stats',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -378,12 +457,18 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                     if (result == true) widget.onRefresh();
                   },
                   icon: const Icon(Icons.edit_outlined),
+                  iconSize: 20,
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
                 ),
                 IconButton(
                   tooltip: 'Delete',
                   onPressed: _confirmDelete,
                   color: cs.error,
                   icon: const Icon(Icons.delete_outline_rounded),
+                  iconSize: 20,
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
                 ),
               ],
             ),

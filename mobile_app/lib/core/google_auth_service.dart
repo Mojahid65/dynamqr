@@ -28,8 +28,6 @@ class GoogleAuthService {
 
   static final GoogleAuthService instance = GoogleAuthService._();
 
-  static const _scopes = <String>['email', 'profile', 'openid'];
-
   bool _initialized = false;
   StreamSubscription<GoogleSignInAuthenticationEvent>? _eventSub;
   GoogleSignInAccount? _lastAccount;
@@ -156,42 +154,37 @@ class GoogleAuthService {
         return null;
       }
 
-      // Try the non-interactive read first. On a fresh sign-in this often
-      // returns null because the user hasn't authorized scopes yet.
-      var authorization =
-          await user.authorizationClient.authorizationForScopes(_scopes);
-
-      if (authorization == null && allowInteractiveAuthorization) {
-        try {
-          authorization =
-              await user.authorizationClient.authorizeScopes(_scopes);
-        } on GoogleSignInException catch (e) {
-          debugPrint('authorizeScopes failed: ${e.code} ${e.description}');
-        } catch (e) {
-          debugPrint('authorizeScopes error: $e');
-        }
-      }
-
-      final accessToken = authorization?.accessToken;
-
       // Supabase only requires the idToken for the Google provider; the
-      // accessToken is optional. So we proceed even when scope
-      // authorization couldn't be obtained.
+      // accessToken is optional. Bypassing the scope authorization client
+      // prevents getting stuck on the Google permission consent screen on Android.
       final response = await Supabase.instance.client.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
-        accessToken: accessToken,
       );
 
-      Session? session = response.session ??
-          Supabase.instance.client.auth.currentSession;
-      // Wait briefly for the client-side session to settle.
-      for (int i = 0; i < 30 && session == null; i++) {
+      // Critical: do NOT trust response.session alone. The Supabase client's
+      // internal `currentSession` is updated asynchronously by an auth-state
+      // listener, and our GoRouter's redirect logic reads `currentSession`,
+      // not the response object. If we navigate before currentSession is
+      // populated, the router bounces the user back to /login.
+      //
+      // So we explicitly wait until `currentSession` is populated (or up to
+      // ~5 s, whichever comes first) before considering the sign-in complete.
+      Session? session = Supabase.instance.client.auth.currentSession;
+      for (int i = 0; i < 50 && session == null; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         session = Supabase.instance.client.auth.currentSession;
       }
+
+      // If the listener still hasn't run, fall back to the response session
+      // and manually set it so the rest of the app sees a logged-in user.
+      session ??= response.session;
+
       if (session != null) {
         _signInController.add(session);
+      } else {
+        debugPrint(
+            'WARNING: signInWithIdToken returned but no session is available.');
       }
       return session;
     } catch (e) {

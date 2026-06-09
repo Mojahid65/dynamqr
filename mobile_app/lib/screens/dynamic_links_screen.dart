@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'edit_link_screen.dart';
+import 'package:go_router/go_router.dart';
 
 class DynamicLinksScreen extends StatefulWidget {
   const DynamicLinksScreen({super.key});
@@ -203,7 +204,7 @@ class DynamicLinksScreenState extends State<DynamicLinksScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
                   sliver: SliverList.separated(
                     itemCount: _links.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       return _buildLinkCard(_links[index]);
                     },
@@ -319,6 +320,13 @@ class DynamicLinksScreenState extends State<DynamicLinksScreen> {
                         .share(ShareParams(text: shortUrl)),
                     icon: const Icon(Icons.share_outlined, size: 18),
                     label: const Text('Share'),
+                  ),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => context.push('/analytics', extra: link),
+                    icon: const Icon(Icons.analytics_outlined, size: 18),
+                    label: const Text('Stats'),
                   ),
                 ),
                 IconButton(

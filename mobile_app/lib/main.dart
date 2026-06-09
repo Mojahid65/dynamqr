@@ -20,6 +20,7 @@ import 'screens/auth_callback_screen.dart';
 import 'screens/main_navigation_screen.dart';
 import 'screens/scanner_screen.dart';
 import 'screens/brand_splash_screen.dart';
+import 'screens/analytics_screen.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/notification_service.dart';
@@ -399,6 +400,13 @@ class _MyAppState extends State<MyApp> {
               selectedColor: args['selectedColor'],
               selectedEyeColor: args['selectedEyeColor'],
             );
+          },
+        ),
+        GoRoute(
+          path: '/analytics',
+          builder: (context, state) {
+            final qrData = state.extra as Map<String, dynamic>;
+            return AnalyticsScreen(qrData: qrData);
           },
         ),
       ],

@@ -12,7 +12,36 @@
           "package_name": "com.dynamqr.mojahidx.in"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "715971039552-kv5tdq7uh68hiblu7l8ubvci5tj6b6l2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dynamqr.mojahidx.in",
+            "certificate_hash": "b6edb0a4924b7788dad70a3468496a96dd638e56"
+          }
+        },
+        {
+          "client_id": "715971039552-utt9km5nt9uc3gak6jqdiadtmmdbppqg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dynamqr.mojahidx.in",
+            "certificate_hash": "7ca6e3afb3ef0257d080fe0f4d3cdec211c23242"
+          }
+        },
+        {
+          "client_id": "715971039552-vcgi35dd3or7fhndcdmv2556sfe8gupr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dynamqr.mojahidx.in",
+            "certificate_hash": "e587122c8cd8a69802e042445acac47d756a5f23"
+          }
+        },
+        {
+          "client_id": "715971039552-6c3kntvcr4il6kim6es8i4qu1la950o7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCTodm0VtHRYePLVVX_fWENZv5ZN52K-DM"
@@ -20,7 +49,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "715971039552-6c3kntvcr4il6kim6es8i4qu1la950o7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

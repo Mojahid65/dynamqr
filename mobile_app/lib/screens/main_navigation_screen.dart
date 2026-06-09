@@ -62,6 +62,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
@@ -80,6 +81,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) {
+          FocusManager.instance.primaryFocus?.unfocus();
           if (i != _currentIndex) {
             setState(() => _currentIndex = i);
           }

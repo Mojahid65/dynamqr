@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:ui' as ui;
+import 'package:image/image.dart' as img_lib;
 
 class QrFullscreenScreen extends StatefulWidget {
   final Map<String, dynamic> qrData;
@@ -73,13 +75,39 @@ class _QrFullscreenScreenState extends State<QrFullscreenScreen> {
         dataModuleStyle: _getModuleStyle(),
       );
 
-      final picData = await painter.toImageData(4096);
-      if (picData != null) {
+      final picData = await painter.toImageData(4096); // We keep painter instance
+      
+      // Render the QR code on a solid white background canvas
+      final size = 4096.0;
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final bgPaint = Paint()..color = Colors.white;
+      canvas.drawRect(Rect.fromLTWH(0, 0, size, size), bgPaint);
+
+      final quietZone = size * 0.08;
+      final qrSize = size - (quietZone * 2);
+      canvas.save();
+      canvas.translate(quietZone, quietZone);
+      painter.paint(canvas, Size(qrSize, qrSize));
+      canvas.restore();
+
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(size.toInt(), size.toInt());
+      final pngData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (pngData != null) {
+        final pngBytes = pngData.buffer.asUint8List();
+        
+        // Convert PNG to JPG
+        final decodedImage = img_lib.decodePng(pngBytes);
+        if (decodedImage == null) throw Exception('Failed to decode PNG');
+        final jpgBytes = img_lib.encodeJpg(decodedImage, quality: 100);
+
         final result = await ImageGallerySaverPlus.saveImage(
-          picData.buffer.asUint8List(),
+          jpgBytes,
           quality: 100,
           name:
-              "QR_HighRes_${widget.qrData['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
+              "QR_HighRes_${widget.qrData['short_code']}_${DateTime.now().millisecondsSinceEpoch}.jpg",
         );
         if (result['isSuccess'] && mounted) {
           messenger.showSnackBar(

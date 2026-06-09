@@ -6,7 +6,6 @@ import '../core/google_auth_service.dart';
 import '../widgets/qr_list_item.dart';
 import 'scanner_screen.dart';
 import 'about_screen.dart';
-import 'donate_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_screen.dart';
 import 'package:provider/provider.dart';
@@ -180,18 +179,6 @@ class DashboardScreenState extends State<DashboardScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AboutScreen()),
-                );
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.favorite_outline_rounded,
-              iconColor: cs.tertiary,
-              label: 'Donate',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const DonateScreen()),
                 );
               },
             ),
@@ -417,7 +404,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
                   sliver: SliverList.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final qr = filtered[index];
                       return QrListItemWidget(
@@ -606,14 +593,12 @@ class _DrawerTile extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool selected;
-  final Color? iconColor;
 
   const _DrawerTile({
     required this.icon,
     required this.label,
     required this.onTap,
     this.selected = false,
-    this.iconColor,
   });
 
   @override
@@ -635,9 +620,7 @@ class _DrawerTile extends StatelessWidget {
                 Icon(
                   icon,
                   size: 22,
-                  color: selected
-                      ? cs.onSecondaryContainer
-                      : (iconColor ?? cs.onSurfaceVariant),
+                  color: selected ? cs.onSecondaryContainer : cs.onSurfaceVariant,
                 ),
                 const SizedBox(width: 16),
                 Expanded(

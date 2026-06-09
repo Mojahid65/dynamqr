@@ -280,16 +280,26 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint(
           'Google sign-in succeeded. session.user=${session.user.id}');
 
-      // Navigate immediately. We deliberately do NOT await
-      // _persistDeviceInfo() — that's a fire-and-forget side effect, and
-      // a slow network round-trip there must not block the user from
-      // reaching the dashboard.
+      // Sanity check: make absolutely sure Supabase has the session
+      // installed before we navigate. The router redirect reads
+      // currentSession, and on slow devices / cold caches it can take
+      // an extra moment for the auth-state event listener to fire.
+      for (int i = 0; i < 30; i++) {
+        if (Supabase.instance.client.auth.currentSession != null) break;
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      // Fire-and-forget profile update; don't block navigation on it.
       unawaited(_persistDeviceInfo());
 
       if (!mounted) return;
+
+      // Yield to the event loop so any pending auth-state listeners (incl.
+      // the GoRouter refreshListenable) have processed the new session.
+      await Future<void>.delayed(Duration.zero);
+
       // Use the global appRouter so we don't depend on the LoginScreen's
-      // BuildContext being still mounted — and call go() which is
-      // navigation-stack-replacing rather than push().
+      // BuildContext being still mounted.
       appRouter.go('/');
     } on GoogleSignInException catch (e) {
       debugPrint('GoogleSignInException ${e.code}: ${e.description}');
@@ -552,7 +562,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-/// "Continue as <name>" card. Mirrors the modern Google one-tap pattern:
+/// "Continue as name" card. Mirrors the modern Google one-tap pattern:
 /// shows the user's avatar + email so re-authenticating is one tap.
 class _ContinueAsCard extends StatelessWidget {
   final GoogleSignInAccount account;
