@@ -277,9 +277,25 @@ class _MyAppState extends State<MyApp> {
     // do this, but we observed cases where the router was recreated by
     // theme/dynamic-color rebuilds and the listener didn't fire in time.
     _navAuthSub = Supabase.instance.client.auth.onAuthStateChange
-        .listen((authState) {
+        .listen((authState) async {
       if (authState.event == AuthChangeEvent.signedIn ||
           authState.event == AuthChangeEvent.tokenRefreshed) {
+        
+        try {
+          final token = await FirebaseMessaging.instance.getToken();
+          if (token != null) {
+            final session = Supabase.instance.client.auth.currentSession;
+            if (session != null) {
+              await Supabase.instance.client
+                  .from('profiles')
+                  .update({'push_token': token})
+                  .eq('id', session.user.id);
+            }
+          }
+        } catch (e) {
+          debugPrint('Failed to save push token: $e');
+        }
+
         // Defer to the next frame so route state is settled.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final loc = _router.routerDelegate.currentConfiguration.uri.path;
@@ -295,6 +311,20 @@ class _MyAppState extends State<MyApp> {
       if (!_splashRemoved) {
         FlutterNativeSplash.remove();
         _splashRemoved = true;
+      }
+    });
+
+    FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      try {
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session != null) {
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'push_token': token})
+              .eq('id', session.user.id);
+        }
+      } catch (e) {
+        debugPrint('Failed to refresh push token: $e');
       }
     });
   }

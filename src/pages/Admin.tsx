@@ -5,7 +5,7 @@ import {
   LogOut, ArrowLeft, Check, X, ShieldAlert, Users, Search, Bell, Activity, 
   AlertTriangle, UploadCloud, Send, CheckSquare, Square, Menu,
   Settings, LayoutDashboard, RefreshCw, SmartphoneNfc, Image as ImageIcon,
-  Home, X as CloseIcon
+  Home, X as CloseIcon, History, Trash2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -25,7 +25,16 @@ type Profile = {
   device_name: string | null;
   android_version: string | null;
   is_banned: boolean;
-  push_token?: string | null; // To check if push is enabled
+  push_token?: string | null;
+  created_at: string;
+};
+
+type NotificationHistory = {
+  id: string;
+  title: string;
+  body: string;
+  image_url: string | null;
+  target_users: string[];
   created_at: string;
 };
 
@@ -36,13 +45,14 @@ const Admin = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [notificationHistory, setNotificationHistory] = useState<NotificationHistory[]>([]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
 
   // Mobile Menu State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'updates' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'notifications' | 'updates' | 'settings'>('overview');
 
   // Form State for Updates
   const [versionCode, setVersionCode] = useState('');
@@ -54,6 +64,11 @@ const Admin = () => {
   // Push Notification State
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewBody, setPreviewBody] = useState('');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -66,7 +81,7 @@ const Admin = () => {
 
     if (updatesError) {
       if (updatesError.code === '42P01') {
-        console.error("The 'app_updates' table does not exist. Please run the SQL script in your Supabase dashboard.");
+        console.error("The 'app_updates' table does not exist.");
       } else {
         console.error('Error fetching updates:', updatesError);
       }
@@ -75,7 +90,6 @@ const Admin = () => {
     }
 
     // Fetch Profiles
-    // Assume we select push_token if it exists. If it fails, it will just omit it.
     const { data: profilesData } = await supabase
       .from('profiles')
       .select('*')
@@ -90,6 +104,13 @@ const Admin = () => {
       .eq('id', 1)
       .single();
     if (settingsData) setMaintenanceMode(settingsData.maintenance_mode);
+
+    // Fetch Notification History
+    const { data: historyData } = await supabase
+      .from('notifications_history')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (historyData) setNotificationHistory(historyData);
 
     setLoading(false);
   };
@@ -175,37 +196,97 @@ const Admin = () => {
     }
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setPreviewImage(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget as HTMLFormElement);
-    const title = formData.get('title') as string;
-    const body = formData.get('body') as string;
-    const imageUrl = formData.get('imageUrl') as string;
     
-    if (!title || !body) {
+    if (!previewTitle || !previewBody) {
       alert('Title and body are required.');
       return;
     }
 
-    const isBroadcast = selectedUsers.length === 0;
-    const payload = {
-      title,
-      body,
-      imageUrl: imageUrl || undefined,
-      userIds: isBroadcast ? 'all' : selectedUsers
-    };
-
     setIsSubmitting(true);
+    let finalImageUrl: string | undefined = undefined;
+
     try {
-      const { error } = await supabase.functions.invoke('send_push_notification', {
+      if (selectedImageFile) {
+        const fileExt = selectedImageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('notifications')
+          .upload(filePath, selectedImageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('notifications')
+          .getPublicUrl(filePath);
+
+        finalImageUrl = publicUrl;
+      }
+
+      const isBroadcast = selectedUsers.length === 0;
+      let tokens: string[] = [];
+      let targetEmails: string[] = [];
+      
+      if (!isBroadcast) {
+        const selectedProfiles = profiles.filter(p => selectedUsers.includes(p.id));
+        tokens = selectedProfiles.map(p => p.push_token).filter(Boolean) as string[];
+        targetEmails = selectedProfiles.map(p => p.email);
+        
+        if (tokens.length === 0) {
+          throw new Error('None of the selected users have Push Enabled. Please select users with valid push tokens.');
+        }
+      }
+
+      const payload = {
+        title: previewTitle,
+        body: previewBody,
+        imageUrl: finalImageUrl,
+        tokens: isBroadcast ? undefined : tokens
+      };
+
+      const { data, error } = await supabase.functions.invoke('send_push_notification', {
         body: payload
       });
 
       if (error) throw error;
-      alert(`Push notification sent successfully to ${isBroadcast ? 'ALL users' : `${selectedUsers.length} selected users`}!`);
+      
+      if (data?.failedTokens && data.failedTokens.length > 0) {
+         for (const deadToken of data.failedTokens) {
+           await supabase.from('profiles').update({ push_token: null }).eq('push_token', deadToken);
+         }
+      }
+
+      await supabase.from('notifications_history').insert([{
+        title: previewTitle,
+        body: previewBody,
+        image_url: finalImageUrl,
+        target_users: isBroadcast ? ['All Users'] : targetEmails
+      }]);
+
+      alert(`Push notification sent successfully!`);
+      
       setIsNotificationModalOpen(false);
       setSelectedUsers([]);
-      (e.target as HTMLFormElement).reset();
+      setPreviewTitle('');
+      setPreviewBody('');
+      setPreviewImage(null);
+      setSelectedImageFile(null);
+      fetchData(); 
     } catch (err: any) {
       console.error(err);
       alert('Failed to send notification: ' + err.message);
@@ -243,14 +324,12 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans selection:bg-indigo-500/30">
-      {/* Background Effects */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px]"></div>
         <div className="absolute top-1/4 -left-40 w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[100px]"></div>
       </div>
 
       <div className="relative z-10 flex flex-col md:flex-row min-h-screen">
-        {/* Sidebar / Topnav Mobile */}
         <div className="md:w-64 border-b md:border-b-0 md:border-r border-white/10 bg-[#111]/80 backdrop-blur-xl flex-shrink-0 flex flex-col transition-all duration-300">
           <div className="flex h-16 md:h-20 items-center justify-between px-6 border-b border-white/5">
             <div className="flex items-center gap-3 font-bold text-lg text-white tracking-wide">
@@ -274,6 +353,12 @@ const Admin = () => {
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === 'overview' ? 'bg-white/10 text-white shadow-sm border border-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             >
               <LayoutDashboard className="w-5 h-5" /> Overview
+            </button>
+            <button 
+              onClick={() => { setActiveTab('notifications'); setIsMobileMenuOpen(false); }} 
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === 'notifications' ? 'bg-white/10 text-white shadow-sm border border-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+              <History className="w-5 h-5" /> Notifications
             </button>
             <button 
               onClick={() => { setActiveTab('updates'); setIsMobileMenuOpen(false); }} 
@@ -302,9 +387,7 @@ const Admin = () => {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden relative">
-          {/* Header */}
           <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 bg-transparent sticky top-0 z-20 backdrop-blur-md border-b border-white/5">
             <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight capitalize">
               {activeTab}
@@ -330,11 +413,8 @@ const Admin = () => {
 
           <main className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-8 pb-24">
             
-            {/* Overview Tab */}
             {activeTab === 'overview' && (
               <div className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                
-                {/* Metric Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-[#111]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-5 shadow-xl hover:bg-[#151515] transition-colors relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -391,7 +471,6 @@ const Admin = () => {
                   </div>
                 </div>
 
-                {/* User Table */}
                 <div className="bg-[#111]/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-xl flex flex-col overflow-hidden">
                   <div className="p-6 border-b border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
@@ -480,10 +559,57 @@ const Admin = () => {
               </div>
             )}
 
-            {/* Updates Tab */}
+            {activeTab === 'notifications' && (
+               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                 <div className="bg-[#111]/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-xl p-6 md:p-8">
+                    <div className="mb-6 flex justify-between items-center border-b border-white/5 pb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                          <History className="w-6 h-6 text-indigo-500" /> Notification History
+                        </h3>
+                        <p className="text-sm text-gray-400 mt-1">Recently sent push notifications to users.</p>
+                      </div>
+                      <button 
+                        onClick={() => setIsNotificationModalOpen(true)}
+                        className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-5 rounded-xl transition-all shadow-lg hover:shadow-xl text-sm whitespace-nowrap"
+                      >
+                        <Send className="w-4 h-4" /> Send New
+                      </button>
+                    </div>
+
+                    <div className="space-y-4 custom-scrollbar">
+                      {notificationHistory.length === 0 ? (
+                        <div className="text-center py-10 text-gray-500">No notifications sent yet.</div>
+                      ) : (
+                        notificationHistory.map((item) => (
+                          <div key={item.id} className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors flex flex-col md:flex-row gap-5">
+                            {item.image_url && (
+                              <div className="h-24 w-24 rounded-xl overflow-hidden flex-shrink-0 border border-white/10">
+                                <img src={item.image_url} alt="Notification" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="text-lg font-bold text-white">{item.title}</h4>
+                                <span className="text-xs text-gray-500 bg-black/40 px-2.5 py-1 rounded-md">{new Date(item.created_at).toLocaleString()}</span>
+                              </div>
+                              <p className="text-sm text-gray-300 mb-3">{item.body}</p>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="text-xs font-medium text-gray-400 bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                                  Targets: {item.target_users.length > 5 ? `${item.target_users.length} users` : item.target_users.join(', ')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                 </div>
+               </div>
+            )}
+
             {activeTab === 'updates' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Publish Form */}
                 <div className="bg-[#111]/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-xl p-6 md:p-8 h-fit">
                   <div className="mb-6">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -566,7 +692,6 @@ const Admin = () => {
                   </form>
                 </div>
 
-                {/* Release History */}
                 <div className="bg-[#111]/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-xl flex flex-col h-fit md:max-h-[800px]">
                   <div className="p-6 md:p-8 border-b border-white/5">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -612,7 +737,6 @@ const Admin = () => {
               </div>
             )}
 
-            {/* Settings Tab */}
             {activeTab === 'settings' && (
               <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-[#111]/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-xl p-6 md:p-8">
@@ -645,16 +769,16 @@ const Admin = () => {
         </div>
       </div>
 
-      {/* Push Notification Modal */}
       {isNotificationModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsNotificationModalOpen(false)}></div>
-          <div className="bg-[#111] border border-white/10 shadow-2xl rounded-3xl w-full max-w-lg overflow-hidden relative z-10 animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-[#111] to-[#151515]">
-              <div>
+          <div className="bg-[#111] border border-white/10 shadow-2xl rounded-3xl w-full max-w-4xl overflow-hidden relative z-10 animate-in zoom-in-95 duration-200 flex flex-col md:flex-row">
+            
+            <div className="flex-1 flex flex-col border-r border-white/5">
+              <div className="p-6 border-b border-white/5 bg-gradient-to-r from-[#111] to-[#151515]">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
                   <Send className="w-5 h-5 text-indigo-500" /> 
-                  Send Notification
+                  Compose Notification
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
                   {selectedUsers.length > 0 
@@ -662,64 +786,118 @@ const Admin = () => {
                     : 'Broadcasting to all registered users'}
                 </p>
               </div>
-              <button onClick={() => setIsNotificationModalOpen(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+              
+              <form onSubmit={handleSendNotification} className="p-6 space-y-5 bg-[#0a0a0a]/50 flex-1 overflow-y-auto">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Notification Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={previewTitle}
+                    onChange={(e) => setPreviewTitle(e.target.value)}
+                    placeholder="e.g. Special Offer Inside!"
+                    className="w-full rounded-xl bg-black border border-white/10 px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:bg-[#111] transition-all outline-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Message Content</label>
+                  <textarea
+                    required
+                    value={previewBody}
+                    onChange={(e) => setPreviewBody(e.target.value)}
+                    placeholder="Type your message here..."
+                    rows={4}
+                    className="w-full rounded-xl bg-black border border-white/10 px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:bg-[#111] transition-all outline-none resize-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-gray-500" /> Notification Image <span className="text-gray-600 font-normal">(Optional)</span>
+                  </label>
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-white/10 border-dashed rounded-xl cursor-pointer bg-black hover:bg-white/5 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <UploadCloud className="w-8 h-8 mb-2 text-gray-500" />
+                        <p className="mb-1 text-sm text-gray-400"><span className="font-semibold text-indigo-400">Click to upload</span> or drag and drop</p>
+                        <p className="text-xs text-gray-500">PNG, JPG or WEBP (MAX. 2MB)</p>
+                      </div>
+                      <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                    </label>
+                  </div>
+                  {selectedImageFile && (
+                    <div className="flex items-center justify-between p-3 mt-2 bg-white/5 rounded-lg border border-white/10">
+                      <span className="text-sm text-gray-300 truncate max-w-[200px]">{selectedImageFile.name}</span>
+                      <button type="button" onClick={() => { setSelectedImageFile(null); setPreviewImage(null); }} className="text-red-400 hover:text-red-300">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsNotificationModalOpen(false)}
+                    className="flex-1 py-3 px-4 rounded-xl border border-white/10 text-white font-medium hover:bg-white/5 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-[2] py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-indigo-500/25"
+                  >
+                    {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    Send Now
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="w-full md:w-[380px] bg-black p-6 flex flex-col items-center justify-center relative border-t md:border-t-0 border-white/5">
+              <button onClick={() => setIsNotificationModalOpen(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
                 <CloseIcon className="w-5 h-5" />
               </button>
+              
+              <h4 className="text-sm font-semibold text-gray-400 mb-6 uppercase tracking-wider">Device Preview</h4>
+              
+              <div className="w-[300px] h-[600px] bg-[#111] rounded-[40px] border-8 border-[#222] p-4 relative shadow-2xl overflow-hidden flex flex-col">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-[#222] rounded-b-3xl"></div>
+                
+                <div className="flex-1 w-full bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] rounded-[24px] mt-4 overflow-hidden relative">
+                  
+                  {(previewTitle || previewBody || previewImage) ? (
+                    <div className="absolute top-4 left-2 right-2 bg-[#2a2a2a]/90 backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in slide-in-from-top-4">
+                      <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-white/5">
+                        <div className="w-4 h-4 bg-indigo-500 rounded-sm flex items-center justify-center">
+                          <ShieldAlert className="w-3 h-3 text-white" />
+                        </div>
+                        <span className="text-[10px] font-medium text-gray-300">DynamQR • now</span>
+                      </div>
+                      
+                      {previewImage && (
+                        <div className="w-full h-32 bg-black">
+                          <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      
+                      <div className="p-4">
+                        <h5 className="text-sm font-bold text-white leading-tight mb-1">{previewTitle || 'Notification Title'}</h5>
+                        <p className="text-xs text-gray-300 leading-snug line-clamp-2">{previewBody || 'Message content goes here...'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <p className="text-xs text-gray-600 text-center px-8">Start typing to see notification preview</p>
+                    </div>
+                  )}
+                  
+                </div>
+              </div>
             </div>
             
-            <form onSubmit={handleSendNotification} className="p-6 space-y-5 bg-[#0a0a0a]/50">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">Notification Title</label>
-                <input
-                  type="text"
-                  name="title"
-                  required
-                  placeholder="e.g. Special Offer Inside!"
-                  className="w-full rounded-xl bg-black border border-white/10 px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:bg-[#111] transition-all outline-none"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">Message Content</label>
-                <textarea
-                  name="body"
-                  required
-                  placeholder="Type your message here..."
-                  rows={3}
-                  className="w-full rounded-xl bg-black border border-white/10 px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:bg-[#111] transition-all outline-none resize-none"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4 text-gray-500" /> Image URL <span className="text-gray-600 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="url"
-                  name="imageUrl"
-                  placeholder="https://example.com/image.png"
-                  className="w-full rounded-xl bg-black border border-white/10 px-4 py-3 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:bg-[#111] transition-all outline-none"
-                />
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsNotificationModalOpen(false)}
-                  className="flex-1 py-3 px-4 rounded-xl border border-white/10 text-white font-medium hover:bg-white/5 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-[2] py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-indigo-500/25"
-                >
-                  {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                  Send Now
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
