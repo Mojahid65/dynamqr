@@ -13,6 +13,7 @@ import DataDeletion from './pages/legal/DataDeletion';
 import Support from './pages/legal/Support';
 import About from './pages/legal/About';
 import DeveloperPortal from './pages/DeveloperPortal';
+import Demo from './components/demo';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { session } = useAuth();
@@ -50,6 +51,18 @@ function App() {
             <Route path="/developer" element={<DeveloperPortal />} />
             <Route path="/api-docs" element={<Navigate to="/developer" replace />} />
             <Route path="/api" element={<Navigate to="/developer" replace />} />
+
+            {/* Efferd Dashboard 2 Demo / Analytics Hub */}
+            <Route path="/demo" element={
+              <PrivateRoute>
+                <Demo />
+              </PrivateRoute>
+            } />
+            <Route path="/analytics" element={
+              <PrivateRoute>
+                <Demo />
+              </PrivateRoute>
+            } />
 
             <Route path="/" element={
               <PrivateRoute>
