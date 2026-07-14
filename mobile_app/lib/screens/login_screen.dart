@@ -4,6 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/google_auth_service.dart';
 import '../main.dart' show appRouter;
@@ -526,7 +527,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const _GoogleLogo(),
+                              : SvgPicture.asset(
+                                  'assets/googleicon/google-icon.svg',
+                                  width: 24,
+                                  height: 24,
+                                ),
                           label: Text(
                             _isLogin
                                 ? 'Continue with Google'
@@ -661,63 +666,4 @@ class _ContinueAsCard extends StatelessWidget {
     final letters = parts.take(2).map((p) => p.characters.first).join();
     return letters.toUpperCase();
   }
-}
-
-/// Google "G" logo painted with the official 4 brand colors.
-/// Self-contained so we don't ship a separate asset for it.
-class _GoogleLogo extends StatelessWidget {
-  const _GoogleLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 18,
-      height: 18,
-      child: CustomPaint(painter: _GoogleGPainter()),
-    );
-  }
-}
-
-class _GoogleGPainter extends CustomPainter {
-  static const _blue = Color(0xFF4285F4);
-  static const _green = Color(0xFF34A853);
-  static const _yellow = Color(0xFFFBBC05);
-  static const _red = Color(0xFFEA4335);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width;
-    final stroke = s * 0.22;
-    final r = (s - stroke) / 2;
-    final c = Offset(s / 2, s / 2);
-    final rect = Rect.fromCircle(center: c, radius: r);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.butt;
-
-    // Four arcs roughly matching the Google logo color distribution.
-    canvas.drawArc(rect, _deg(-25), _deg(105), false, paint..color = _blue);
-    canvas.drawArc(rect, _deg(80), _deg(75), false, paint..color = _green);
-    canvas.drawArc(rect, _deg(155), _deg(75), false, paint..color = _yellow);
-    canvas.drawArc(rect, _deg(230), _deg(105), false, paint..color = _red);
-
-    // Horizontal "tail" of the G — a small bar from the center outwards.
-    final barPaint = Paint()
-      ..color = _blue
-      ..style = PaintingStyle.fill;
-    final barHeight = stroke;
-    final barRect = Rect.fromLTWH(
-      c.dx,
-      c.dy - barHeight / 2,
-      r + stroke / 2,
-      barHeight,
-    );
-    canvas.drawRect(barRect, barPaint);
-  }
-
-  double _deg(double d) => d * 3.1415926535 / 180.0;
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

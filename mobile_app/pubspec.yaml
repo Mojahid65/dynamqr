@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.7.5+13
+version: 1.7.9+20
 
 environment:
   sdk: ^3.11.5
@@ -40,7 +40,7 @@ dependencies:
   go_router: ^17.2.2
   screenshot: ^3.0.0
   permission_handler: ^12.0.1
-  gallery_saver_plus: ^3.2.9
+
   image_gallery_saver_plus: ^4.0.1
   url_launcher: ^6.3.2
   share_plus: ^13.1.0
@@ -54,9 +54,14 @@ dependencies:
   firebase_core: ^4.7.0
   firebase_messaging: ^16.2.0
   device_info_plus: ^13.1.0
+  in_app_update: ^4.2.3
   google_sign_in: ^7.1.1
   dynamic_color: ^1.7.0
   flutter_native_splash: ^2.4.6
+  flutter_svg: ^2.0.10
+  lottie: ^3.1.2
+  quick_actions: ^1.1.0
+  audioplayers: ^6.7.1
 
 dev_dependencies:
   flutter_test:
@@ -84,6 +89,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/
+    - assets/googleicon/
+    - assets/googleicon/animations/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

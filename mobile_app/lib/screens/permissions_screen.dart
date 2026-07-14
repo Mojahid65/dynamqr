@@ -22,7 +22,6 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     setState(() => _isLoading = true);
     try {
       await Permission.camera.request();
-      await _requestMediaPermission();
       await FirebaseMessaging.instance.requestPermission(
         alert: true,
         badge: true,
@@ -42,16 +41,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     }
   }
 
-  Future<void> _requestMediaPermission() async {
-    if (Platform.isAndroid) {
-      final photosStatus = await Permission.photos.status;
-      if (!photosStatus.isGranted) await Permission.photos.request();
-      final storageStatus = await Permission.storage.status;
-      if (!storageStatus.isGranted) await Permission.storage.request();
-      return;
-    }
-    await Permission.photos.request();
-  }
+
 
   Future<void> _skipForNow() async {
     final prefs = await SharedPreferences.getInstance();
@@ -102,7 +92,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Allow permissions to scan QR codes, save images, and receive important alerts.',
+                    'Allow permissions to scan QR codes and receive important alerts.',
                     textAlign: TextAlign.center,
                     style: tt.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant,
@@ -116,12 +106,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                     subtitle: 'Scan QR codes quickly',
                   ),
                   const SizedBox(height: 8),
-                  _PermissionTile(
-                    icon: Icons.photo_library_rounded,
-                    title: 'Photos & Storage',
-                    subtitle: 'Save your generated QR images',
-                  ),
-                  const SizedBox(height: 8),
+
                   _PermissionTile(
                     icon: Icons.notifications_active_rounded,
                     title: 'Notifications',

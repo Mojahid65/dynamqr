@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'edit_link_screen.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lottie/lottie.dart';
 
 class DynamicLinksScreen extends StatefulWidget {
   const DynamicLinksScreen({super.key});
@@ -56,10 +57,48 @@ class DynamicLinksScreenState extends State<DynamicLinksScreen> {
     try {
       await _supabase.from('qr_codes').delete().eq('id', id);
       if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Link deleted')),
-        );
         _fetchLinks();
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            Future.delayed(const Duration(seconds: 2), () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            });
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Lottie.asset(
+                    'assets/googleicon/animations/183ba51d-d684-480c-98ec-5d83e69c690a.json',
+                    width: 200,
+                    height: 200,
+                    repeat: false,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Deleted Successfully!',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -310,23 +349,56 @@ class DynamicLinksScreenState extends State<DynamicLinksScreen> {
                         const SnackBar(content: Text('Copied to clipboard')),
                       );
                     },
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    label: const Text('Copy'),
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Copy',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => SharePlus.instance
                         .share(ShareParams(text: shortUrl)),
-                    icon: const Icon(Icons.share_outlined, size: 18),
-                    label: const Text('Share'),
+                    icon: const Icon(Icons.share_outlined, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Share',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => context.push('/analytics', extra: link),
-                    icon: const Icon(Icons.analytics_outlined, size: 18),
-                    label: const Text('Stats'),
+                    icon: const Icon(Icons.analytics_outlined, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Stats',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -341,11 +413,17 @@ class DynamicLinksScreenState extends State<DynamicLinksScreen> {
                     if (result == true) _fetchLinks();
                   },
                   icon: const Icon(Icons.edit_outlined),
+                  iconSize: 20,
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
                 ),
                 IconButton(
                   tooltip: 'Delete',
                   color: cs.error,
                   icon: const Icon(Icons.delete_outline_rounded),
+                  iconSize: 20,
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
                   onPressed: () {
                     showDialog(
                       context: context,

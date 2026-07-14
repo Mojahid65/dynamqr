@@ -12,6 +12,7 @@ import Terms from './pages/legal/Terms';
 import DataDeletion from './pages/legal/DataDeletion';
 import Support from './pages/legal/Support';
 import About from './pages/legal/About';
+import DeveloperPortal from './pages/DeveloperPortal';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { session } = useAuth();
@@ -44,6 +45,11 @@ function App() {
             <Route path="/support" element={<Support />} />
             <Route path="/help" element={<Navigate to="/support" replace />} />
             <Route path="/about" element={<About />} />
+
+            {/* Developer Portal & API documentation */}
+            <Route path="/developer" element={<DeveloperPortal />} />
+            <Route path="/api-docs" element={<Navigate to="/developer" replace />} />
+            <Route path="/api" element={<Navigate to="/developer" replace />} />
 
             <Route path="/" element={
               <PrivateRoute>

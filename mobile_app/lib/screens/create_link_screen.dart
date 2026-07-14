@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math';
+import 'package:lottie/lottie.dart';
 
 class CreateLinkScreen extends StatefulWidget {
   const CreateLinkScreen({super.key});
@@ -60,10 +61,51 @@ class _CreateLinkScreenState extends State<CreateLinkScreen> {
       }
 
       if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Dynamic link created')),
-        );
-        Navigator.pop(context, true);
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            Future.delayed(const Duration(seconds: 2), () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            });
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Lottie.asset(
+                    'assets/googleicon/animations/fcd583a2-3388-11ef-b690-cbc97675b70d.json',
+                    width: 200,
+                    height: 200,
+                    repeat: false,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Created Successfully!',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ).then((_) {
+          if (mounted) {
+            Navigator.pop(context, true);
+          }
+        });
       }
     } catch (e) {
       if (mounted) {

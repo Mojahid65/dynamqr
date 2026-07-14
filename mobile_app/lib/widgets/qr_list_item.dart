@@ -251,8 +251,9 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
     );
   }
 
-  void _confirmDelete() {
-    showDialog(
+  Future<bool> _confirmDelete() async {
+    bool confirm = false;
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.delete_outline_rounded),
@@ -267,14 +268,15 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
           ),
           FilledButton.tonal(
             onPressed: () {
+              confirm = true;
               Navigator.pop(context);
-              widget.onDelete(widget.qr['id']);
             },
             child: const Text('Delete'),
           ),
         ],
       ),
     );
+    return confirm;
   }
 
   @override
@@ -284,7 +286,24 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
     final shortUrl = 'https://dynamqr.vercel.app/${widget.qr['short_code']}';
     final keyword = widget.qr['keyword'] ?? widget.qr['short_code'];
 
-    return Card(
+    return Dismissible(
+      key: Key('dismiss-${widget.qr['id']}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.red.shade400,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 32),
+      ),
+      confirmDismiss: (direction) => _confirmDelete(),
+      onDismissed: (direction) {
+        widget.onDelete(widget.qr['id']);
+      },
+      child: Card(
       child: Column(
         children: [
           Padding(
@@ -463,7 +482,11 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                 ),
                 IconButton(
                   tooltip: 'Delete',
-                  onPressed: _confirmDelete,
+                  onPressed: () async {
+                    if (await _confirmDelete()) {
+                      widget.onDelete(widget.qr['id']);
+                    }
+                  },
                   color: cs.error,
                   icon: const Icon(Icons.delete_outline_rounded),
                   iconSize: 20,
@@ -567,7 +590,7 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _styleLabel(BuildContext context, String text) {

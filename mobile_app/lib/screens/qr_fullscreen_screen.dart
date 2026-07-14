@@ -4,7 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:ui' as ui;
-import 'package:image/image.dart' as img_lib;
+import 'package:lottie/lottie.dart';
 
 class QrFullscreenScreen extends StatefulWidget {
   final Map<String, dynamic> qrData;
@@ -75,10 +75,8 @@ class _QrFullscreenScreenState extends State<QrFullscreenScreen> {
         dataModuleStyle: _getModuleStyle(),
       );
 
-      final picData = await painter.toImageData(4096); // We keep painter instance
-      
       // Render the QR code on a solid white background canvas
-      final size = 4096.0;
+      final size = 2048.0; // Reduced from 4096.0 to prevent memory crashes and improve speed
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
       final bgPaint = Paint()..color = Colors.white;
@@ -98,22 +96,54 @@ class _QrFullscreenScreenState extends State<QrFullscreenScreen> {
       if (pngData != null) {
         final pngBytes = pngData.buffer.asUint8List();
         
-        // Convert PNG to JPG
-        final decodedImage = img_lib.decodePng(pngBytes);
-        if (decodedImage == null) throw Exception('Failed to decode PNG');
-        final jpgBytes = img_lib.encodeJpg(decodedImage, quality: 100);
-
+        // Save directly as PNG to bypass the slow and memory-intensive Dart image encoding
         final result = await ImageGallerySaverPlus.saveImage(
-          jpgBytes,
+          pngBytes,
           quality: 100,
           name:
-              "QR_HighRes_${widget.qrData['short_code']}_${DateTime.now().millisecondsSinceEpoch}.jpg",
+              "QR_HighRes_${widget.qrData['short_code']}_${DateTime.now().millisecondsSinceEpoch}",
         );
         if (result['isSuccess'] && mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('High Quality QR Code saved to gallery'),
-            ),
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              Future.delayed(const Duration(seconds: 2), () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
+              });
+              return Dialog(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Lottie.asset(
+                      'assets/googleicon/animations/dd583ac6-79f0-11ee-aa42-5348a68c3dac.json',
+                      width: 200,
+                      height: 200,
+                      repeat: false,
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Saved Successfully!',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         } else {
           throw Exception('Failed to save');

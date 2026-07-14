@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
@@ -11,6 +12,7 @@ import 'terms_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/update_service.dart';
+import 'package:lottie/lottie.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -25,6 +27,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> _qrCodes = [];
   String _searchQuery = '';
   bool _isLoading = true;
+  String? _newlyCreatedQrId;
 
   @override
   void initState() {
@@ -42,7 +45,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchQRCodes() async {
+  Future<void> _fetchQRCodes({bool fromCreate = false}) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
@@ -58,6 +61,19 @@ class DashboardScreenState extends State<DashboardScreen> {
             final config = item['design_config'] as Map<String, dynamic>?;
             return config?['is_link'] != true;
           }).toList();
+          
+          if (fromCreate && _qrCodes.isNotEmpty) {
+            _newlyCreatedQrId = _qrCodes.first['id'];
+            HapticFeedback.heavyImpact();
+            SystemSound.play(SystemSoundType.click);
+            
+            // clear the animation flag after some time so it doesn't re-animate
+            // if the list is rebuilt for other reasons
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) setState(() => _newlyCreatedQrId = null);
+            });
+          }
+          
           _isLoading = false;
         });
       }
@@ -67,7 +83,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Public refresh hook used by the parent NavigationScreen's FAB.
-  void refresh() => _fetchQRCodes();
+  void refresh({bool fromCreate = false}) => _fetchQRCodes(fromCreate: fromCreate);
 
   Future<void> _signOut() async {
     // Disconnect Google + Supabase together so a future "Continue with
@@ -83,10 +99,48 @@ class DashboardScreenState extends State<DashboardScreen> {
     try {
       await _supabase.from('qr_codes').delete().eq('id', id);
       if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('QR Code deleted')),
-        );
         _fetchQRCodes();
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            Future.delayed(const Duration(seconds: 2), () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            });
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Lottie.asset(
+                    'assets/googleicon/animations/183ba51d-d684-480c-98ec-5d83e69c690a.json',
+                    width: 200,
+                    height: 200,
+                    repeat: false,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Deleted Successfully!',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -344,20 +398,6 @@ class DashboardScreenState extends State<DashboardScreen> {
               SliverAppBar.large(
                 pinned: true,
                 title: const Text('Your QR Codes'),
-                actions: [
-                  IconButton(
-                    tooltip: 'Scan',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ScannerScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.qr_code_scanner_rounded),
-                  ),
-                ],
               ),
               SliverToBoxAdapter(child: _buildSummaryCard(context)),
               SliverToBoxAdapter(child: _buildSearchBar(context)),
@@ -407,11 +447,29 @@ class DashboardScreenState extends State<DashboardScreen> {
                     separatorBuilder: (context, index) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final qr = filtered[index];
-                      return QrListItemWidget(
+                      Widget child = QrListItemWidget(
                         qr: qr,
                         onRefresh: _fetchQRCodes,
                         onDelete: _deleteQrCode,
                       );
+                      
+                      if (_newlyCreatedQrId == qr['id']) {
+                        child = TweenAnimationBuilder<Offset>(
+                          key: ValueKey('anim-${qr['id']}'),
+                          tween: Tween(begin: const Offset(-1.0, 0.0), end: Offset.zero),
+                          duration: const Duration(milliseconds: 600),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, offset, child) {
+                            return FractionalTranslation(
+                              translation: offset,
+                              child: child,
+                            );
+                          },
+                          child: child,
+                        );
+                      }
+                      
+                      return child;
                     },
                   ),
                 ),

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:in_app_update/in_app_update.dart';
 import 'create_qr_screen.dart';
 import 'create_link_screen.dart';
 import 'dashboard_screen.dart';
 import 'dynamic_links_screen.dart';
+import 'scanner_screen.dart';
 
 /// Top-level scaffold that owns the persistent NavigationBar AND the
 /// Create FAB. Hosting the FAB here (instead of inside each child screen)
@@ -37,6 +39,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+    _checkForUpdate();
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      AppUpdateInfo updateInfo = await InAppUpdate.checkForUpdate();
+      if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
+        if (updateInfo.flexibleUpdateAllowed) {
+          await InAppUpdate.startFlexibleUpdate();
+          await InAppUpdate.completeFlexibleUpdate();
+        } else if (updateInfo.immediateUpdateAllowed) {
+          await InAppUpdate.performImmediateUpdate();
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to check for updates: $e');
+    }
   }
 
   Future<void> _onCreatePressed() async {
@@ -47,7 +66,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         useSafeArea: true,
         builder: (_) => const CreateQrScreen(),
       );
-      if (result == true) _dashboardKey.currentState?.refresh();
+      if (result == true) _dashboardKey.currentState?.refresh(fromCreate: true);
     } else {
       final result = await showModalBottomSheet<bool>(
         context: context,
@@ -79,11 +98,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onPressed: _onCreatePressed,
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
+        selectedIndex: _currentIndex == 1 ? 2 : 0,
         onDestinationSelected: (i) {
           FocusManager.instance.primaryFocus?.unfocus();
-          if (i != _currentIndex) {
-            setState(() => _currentIndex = i);
+          if (i == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ScannerScreen(),
+              ),
+            );
+            return;
+          }
+          final newIndex = i == 2 ? 1 : 0;
+          if (newIndex != _currentIndex) {
+            setState(() => _currentIndex = newIndex);
           }
         },
         destinations: const [
@@ -91,6 +120,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             icon: Icon(Icons.qr_code_2_outlined),
             selectedIcon: Icon(Icons.qr_code_2_rounded),
             label: 'QR Codes',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.qr_code_scanner_rounded),
+            label: 'Scan QR',
           ),
           NavigationDestination(
             icon: Icon(Icons.link_outlined),

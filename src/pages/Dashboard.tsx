@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
-import { Plus, QrCode, LogOut, ExternalLink, Download, Edit, Trash2, ShieldAlert } from 'lucide-react';
+import { Plus, QrCode, LogOut, ExternalLink, Download, Edit, Trash2, ShieldAlert, Code2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 type QRCodeData = {
@@ -53,7 +53,7 @@ const Dashboard = () => {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-lg mr-3 shadow-md">
-                <QrCode className="w-5 h-5 text-white" />
+                <QrCode className="w-5 h-5 text-foreground" />
               </div>
               <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
                 DynamQR
@@ -80,7 +80,14 @@ const Dashboard = () => {
             <h1 className="text-2xl font-bold text-slate-900">Your QR Codes</h1>
             <p className="text-slate-500 text-sm mt-1">Manage and track your dynamic links</p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-3">
+            <Link 
+              to="/developer" 
+              className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all shadow-md active:scale-95 border border-slate-700"
+            >
+              <Code2 className="w-5 h-5 text-indigo-400" />
+              <span>Developer API</span>
+            </Link>
             {(user?.email === import.meta.env.VITE_ADMIN_EMAIL || user?.email === 'mojahidgfx@gmail.com') && (
               <Link 
                 to="/admin" 
@@ -92,7 +99,7 @@ const Dashboard = () => {
             )}
             <Link 
               to="/create" 
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all shadow-md shadow-indigo-200 active:scale-95"
+              className="bg-indigo-600 hover:bg-indigo-700 text-foreground px-5 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all shadow-md shadow-indigo-200 active:scale-95"
             >
               <Plus className="w-5 h-5" />
               <span className="hidden sm:inline">Create QR Code</span>

@@ -12,6 +12,7 @@ import 'core/google_auth_service.dart';
 import 'core/google_sign_in_config.dart';
 import 'screens/login_screen.dart';
 import 'screens/create_qr_screen.dart';
+import 'screens/create_link_screen.dart';
 import 'screens/edit_qr_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/permissions_screen.dart';
@@ -24,6 +25,8 @@ import 'screens/analytics_screen.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/notification_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:quick_actions/quick_actions.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -74,11 +77,40 @@ Future<void> main() async {
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
     final notification = message.notification;
     if (notification == null) return;
+    
+    String? imageUrl = notification.android?.imageUrl ?? notification.apple?.imageUrl;
+    String? link = message.data['link'] ?? message.data['url'];
+    
     await NotificationService().showNotification(
       title: notification.title ?? 'DynamQR',
       body: notification.body ?? 'You have a new notification.',
+      imageUrl: imageUrl,
+      link: link,
     );
   });
+
+  // Handle notification tap when the app is in the background
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+    String? link = message.data['link'] ?? message.data['url'];
+    if (link != null && link.startsWith('http')) {
+      final url = Uri.parse(link);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    }
+  });
+
+  // Handle notification tap when the app is completely terminated
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    String? link = initialMessage.data['link'] ?? initialMessage.data['url'];
+    if (link != null && link.startsWith('http')) {
+      final url = Uri.parse(link);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    }
+  }
 
   unawaited(_subscribeToAnnouncementsIfAuthorized());
 
@@ -272,6 +304,19 @@ class _MyAppState extends State<MyApp> {
     _router = _buildRouter();
     appRouter = _router;
 
+    const quickActions = QuickActions();
+    quickActions.initialize((String shortcutType) {
+      if (shortcutType == 'scan') {
+        appRouter.push('/scan');
+      } else if (shortcutType == 'create_link') {
+        appRouter.push('/create_link');
+      }
+    });
+    quickActions.setShortcutItems(<ShortcutItem>[
+      const ShortcutItem(type: 'scan', localizedTitle: 'Scan QR Code'),
+      const ShortcutItem(type: 'create_link', localizedTitle: 'Create Link'),
+    ]);
+
     // Belt-and-suspenders: when Supabase emits a SIGNED_IN event, force
     // navigation off /login. The router's refreshListenable should already
     // do this, but we observed cases where the router was recreated by
@@ -279,6 +324,7 @@ class _MyAppState extends State<MyApp> {
     _navAuthSub = Supabase.instance.client.auth.onAuthStateChange
         .listen((authState) async {
       if (authState.event == AuthChangeEvent.signedIn ||
+          authState.event == AuthChangeEvent.initialSession ||
           authState.event == AuthChangeEvent.tokenRefreshed) {
         
         try {
@@ -411,6 +457,10 @@ class _MyAppState extends State<MyApp> {
         GoRoute(
           path: '/create',
           builder: (context, state) => const CreateQrScreen(),
+        ),
+        GoRoute(
+          path: '/create_link',
+          builder: (context, state) => const CreateLinkScreen(),
         ),
         GoRoute(
           path: '/edit',
