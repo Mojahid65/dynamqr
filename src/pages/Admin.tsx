@@ -5,9 +5,18 @@ import {
   LogOut, ArrowLeft, Check, X, ShieldAlert, Users, Search, Bell, Activity, 
   AlertTriangle, UploadCloud, Send, CheckSquare, Square, Menu,
   Settings, LayoutDashboard, RefreshCw, SmartphoneNfc, Image as ImageIcon,
-  Home, X as CloseIcon, History, Trash2
+  Home, X as CloseIcon, History, Trash2, QrCode, Edit
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+type QRCodeData = {
+  id: string;
+  short_code: string;
+  keyword: string | null;
+  destination_url: string;
+  user_id: string;
+  created_at: string;
+};
 
 type AppUpdate = {
   id: string;
@@ -52,7 +61,13 @@ const Admin = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'notifications' | 'updates' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'notifications' | 'updates' | 'settings' | 'qrcodes'>('overview');
+
+  // QR Code State
+  const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
+  const [qrSearchQuery, setQrSearchQuery] = useState('');
+  const [editingQr, setEditingQr] = useState<QRCodeData | null>(null);
+  const [editUrl, setEditUrl] = useState('');
 
   // Form State for Updates
   const [versionCode, setVersionCode] = useState('');
@@ -112,6 +127,13 @@ const Admin = () => {
       .order('created_at', { ascending: false });
     if (historyData) setNotificationHistory(historyData);
 
+    // Fetch QR Codes
+    const { data: qrData } = await supabase
+      .from('qr_codes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (qrData) setQrCodes(qrData);
+
     setLoading(false);
   };
 
@@ -135,6 +157,26 @@ const Admin = () => {
     } else {
       alert('Failed to update maintenance mode: ' + error.message);
     }
+  };
+
+  const handleUpdateQrUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQr || !editUrl) return;
+    setIsSubmitting(true);
+    const { error } = await supabase
+      .from('qr_codes')
+      .update({ destination_url: editUrl })
+      .eq('id', editingQr.id);
+    
+    if (!error) {
+      setQrCodes(qrCodes.map(q => q.id === editingQr.id ? { ...q, destination_url: editUrl } : q));
+      setEditingQr(null);
+      setEditUrl('');
+      alert('QR code updated successfully');
+    } else {
+      alert('Failed to update QR code: ' + error.message);
+    }
+    setIsSubmitting(false);
   };
 
   const toggleBan = async (userId: string, currentStatus: boolean) => {
@@ -365,6 +407,12 @@ const Admin = () => {
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === 'updates' ? 'bg-white/10 text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
             >
               <RefreshCw className="w-5 h-5" /> Updates
+            </button>
+            <button 
+              onClick={() => { setActiveTab('qrcodes'); setIsMobileMenuOpen(false); }} 
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === 'qrcodes' ? 'bg-white/10 text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+            >
+              <QrCode className="w-5 h-5" /> QR Codes
             </button>
             <button 
               onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }} 
@@ -737,6 +785,91 @@ const Admin = () => {
               </div>
             )}
 
+            {activeTab === 'qrcodes' && (
+              <div className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-card/80 backdrop-blur-xl border border-border rounded-3xl shadow-xl flex flex-col overflow-hidden">
+                  <div className="p-6 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <QrCode className="w-5 h-5 text-indigo-500" /> All QR Codes
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">View and manage all user-generated QR codes.</p>
+                    </div>
+                    <div className="relative w-full sm:w-auto">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Search ID, email, url..."
+                        value={qrSearchQuery}
+                        onChange={(e) => setQrSearchQuery(e.target.value)}
+                        className="w-full sm:w-64 rounded-xl bg-white/5 border border-border pl-10 pr-4 py-2 text-sm text-foreground placeholder-gray-500 outline-none focus:border-indigo-500/50 focus:bg-white/10 transition-all"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-muted-foreground uppercase bg-white/5 border-b border-border">
+                        <tr>
+                          <th className="px-6 py-4 font-semibold tracking-wider">User</th>
+                          <th className="px-6 py-4 font-semibold tracking-wider">QR Code Details</th>
+                          <th className="px-6 py-4 font-semibold tracking-wider">Destination URL</th>
+                          <th className="px-6 py-4 font-semibold tracking-wider text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {(() => {
+                          const filteredQrs = qrCodes.filter(q => {
+                            const userEmail = profiles.find(p => p.id === q.user_id)?.email || '';
+                            const qStr = qrSearchQuery.toLowerCase();
+                            return q.id.toLowerCase().includes(qStr) || 
+                                   userEmail.toLowerCase().includes(qStr) || 
+                                   q.short_code.toLowerCase().includes(qStr) || 
+                                   q.destination_url.toLowerCase().includes(qStr);
+                          });
+                          
+                          if (filteredQrs.length === 0) {
+                            return <tr><td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">No QR codes found.</td></tr>;
+                          }
+
+                          return filteredQrs.map(qr => {
+                            const userEmail = profiles.find(p => p.id === qr.user_id)?.email || 'Unknown';
+                            return (
+                              <tr key={qr.id} className="hover:bg-white/[0.02] transition-colors">
+                                <td className="px-6 py-4">
+                                  <div className="font-medium text-gray-200">{userEmail}</div>
+                                  <div className="text-xs text-muted-foreground mt-1 truncate max-w-[150px]" title={qr.id}>ID: {qr.id}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-1.5 text-indigo-400 font-medium">
+                                    /{qr.short_code}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-1">{new Date(qr.created_at).toLocaleDateString()}</div>
+                                </td>
+                                <td className="px-6 py-4 max-w-xs">
+                                  <a href={qr.destination_url} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-indigo-400 truncate block transition-colors" title={qr.destination_url}>
+                                    {qr.destination_url}
+                                  </a>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button 
+                                    onClick={() => { setEditingQr(qr); setEditUrl(qr.destination_url); }}
+                                    className="inline-flex items-center justify-center rounded-lg text-xs font-bold transition-all px-3 py-1.5 bg-white/10 text-foreground hover:bg-white/20 border border-white/10"
+                                  >
+                                    <Edit className="w-3.5 h-3.5 mr-1.5" /> Edit URL
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          });
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'settings' && (
               <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-card/80 backdrop-blur-xl border border-border rounded-3xl shadow-xl p-6 md:p-8">
@@ -897,7 +1030,53 @@ const Admin = () => {
                 </div>
               </div>
             </div>
-            
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingQr && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditingQr(null)}></div>
+          <div className="bg-card border border-border shadow-2xl rounded-3xl w-full max-w-md overflow-hidden relative z-10 animate-in zoom-in-95 duration-200 flex flex-col">
+            <div className="p-6 border-b border-border bg-gradient-to-r from-[#111] to-[#151515] flex justify-between items-center">
+              <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <Edit className="w-5 h-5 text-indigo-500" /> 
+                Edit Destination URL
+              </h3>
+              <button onClick={() => setEditingQr(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateQrUrl} className="p-6 space-y-5 bg-background/50">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">New Destination URL</label>
+                <input
+                  type="url"
+                  required
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  className="w-full rounded-xl bg-black border border-border px-4 py-3 text-sm text-foreground placeholder-gray-600 focus:border-indigo-500 focus:bg-card transition-all outline-none"
+                />
+              </div>
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingQr(null)}
+                  className="flex-1 py-3 px-4 rounded-xl border border-border text-foreground font-medium hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-[2] py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-foreground font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-indigo-500/25"
+                >
+                  {isSubmitting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
