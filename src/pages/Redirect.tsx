@@ -86,10 +86,14 @@ export default function Redirect() {
   }, [shortCode]);
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent mx-auto"></div>
-        <p className="mt-4 text-gray-600 font-medium">Redirecting...</p>
+    <div className="flex h-screen w-full items-center justify-center bg-background relative overflow-hidden">
+      {/* Expressive blobbes */}
+      <div className="absolute top-1/4 left-1/4 w-[30rem] h-[30rem] bg-primary/10 rounded-full blur-[80px]" />
+      <div className="absolute bottom-1/4 right-1/4 w-[30rem] h-[30rem] bg-tertiary/10 rounded-full blur-[80px]" />
+      
+      <div className="text-center relative z-10 bg-surface-container p-8 rounded-[2rem] shadow-lg border border-outline-variant">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+        <p className="mt-6 text-on-surface font-semibold tracking-tight">Routing safely to destination...</p>
       </div>
     </div>
   );

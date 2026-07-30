@@ -22,6 +22,7 @@ import 'screens/main_navigation_screen.dart';
 import 'screens/scanner_screen.dart';
 import 'screens/brand_splash_screen.dart';
 import 'screens/analytics_screen.dart';
+import 'screens/screen_scan_result_screen.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/notification_service.dart';
@@ -487,6 +488,14 @@ class _MyAppState extends State<MyApp> {
           builder: (context, state) {
             final qrData = state.extra as Map<String, dynamic>;
             return AnalyticsScreen(qrData: qrData);
+          },
+        ),
+        GoRoute(
+          path: '/screen_scan_result',
+          builder: (context, state) {
+            final imagePath = state.uri.queryParameters['imagePath'] ?? '';
+            final data = state.uri.queryParameters['data'] ?? '';
+            return ScreenScanResultScreen(imagePath: imagePath, qrData: data);
           },
         ),
       ],

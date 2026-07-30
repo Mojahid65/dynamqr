@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import { Plus, QrCode, LogOut, ExternalLink, Download, Edit, Trash2, ShieldAlert, Code2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { Button } from '../components/ui/button';
 
 type QRCodeData = {
   id: string;
@@ -46,24 +47,24 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <nav className="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-lg mr-3 shadow-md">
-                <QrCode className="w-5 h-5 text-foreground" />
+              <div className="bg-primary-container p-2 rounded-[1rem] mr-3">
+                <QrCode className="w-6 h-6 text-on-primary-container" />
               </div>
-              <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
+              <span className="text-xl font-bold text-foreground">
                 DynamQR
               </span>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-slate-500 hidden md:block">{user?.email}</span>
+              <span className="text-sm font-medium text-on-surface-variant hidden md:block">{user?.email}</span>
               <button 
                 onClick={signOut}
-                className="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100 transition-colors"
+                className="text-on-surface-variant hover:text-on-surface p-2 rounded-full hover:bg-surface-variant transition-colors"
                 title="Sign Out"
               >
                 <LogOut className="w-5 h-5" />
@@ -77,65 +78,61 @@ const Dashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Your QR Codes</h1>
-            <p className="text-slate-500 text-sm mt-1">Manage and track your dynamic links</p>
+            <h1 className="text-3xl font-bold text-foreground tracking-tight">Your QR Codes</h1>
+            <p className="text-on-surface-variant text-base mt-1">Manage and track your dynamic links</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link 
-              to="/developer" 
-              className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all shadow-md active:scale-95 border border-slate-700"
-            >
-              <Code2 className="w-5 h-5 text-indigo-400" />
-              <span>Developer API</span>
-            </Link>
-            {(user?.email === import.meta.env.VITE_ADMIN_EMAIL || user?.email === 'mojahidgfx@gmail.com') && (
-              <Link 
-                to="/admin" 
-                className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all border border-red-200 active:scale-95"
-              >
-                <ShieldAlert className="w-5 h-5" />
-                <span className="hidden sm:inline">Admin</span>
+            <Button asChild variant="outline" size="sm" className="rounded-full h-10 px-4 font-medium">
+              <Link to="/developer">
+                <Code2 className="w-5 h-5 mr-2 text-primary" />
+                Developer API
               </Link>
+            </Button>
+            {(user?.email === import.meta.env.VITE_ADMIN_EMAIL || user?.email === 'mojahidgfx@gmail.com') && (
+              <Button asChild variant="destructive" size="sm" className="rounded-full h-10 px-4 bg-error-container text-on-error-container hover:bg-error hover:text-on-error font-medium">
+                <Link to="/admin">
+                  <ShieldAlert className="w-5 h-5 mr-2" />
+                  <span className="hidden sm:inline">Admin</span>
+                </Link>
+              </Button>
             )}
-            <Link 
-              to="/create" 
-              className="bg-indigo-600 hover:bg-indigo-700 text-foreground px-5 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all shadow-md shadow-indigo-200 active:scale-95"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">Create QR Code</span>
-              <span className="sm:hidden">Create</span>
-            </Link>
+            <Button asChild variant="default" size="sm" className="rounded-full h-10 px-6 font-medium shadow-md">
+              <Link to="/create">
+                <Plus className="w-5 h-5 mr-1" />
+                <span className="hidden sm:inline">Create QR Code</span>
+                <span className="sm:hidden">Create</span>
+              </Link>
+            </Button>
           </div>
         </div>
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 h-64 animate-pulse">
+              <div key={i} className="bg-surface-container-low rounded-[1.5rem] p-6 shadow-sm border border-outline-variant h-64 animate-pulse">
                 <div className="flex space-x-4 mb-4">
-                  <div className="w-24 h-24 bg-slate-200 rounded-xl"></div>
+                  <div className="w-24 h-24 bg-surface-variant rounded-[1rem]"></div>
                   <div className="flex-1 space-y-3 py-1">
-                    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
-                    <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                    <div className="h-4 bg-surface-variant rounded w-3/4"></div>
+                    <div className="h-3 bg-surface-variant rounded w-1/2"></div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
         ) : qrCodes.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-slate-200 border-dashed p-12 text-center">
-            <div className="mx-auto w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
-              <QrCode className="w-8 h-8 text-indigo-500" />
+          <div className="bg-surface-container rounded-[2rem] p-12 text-center max-w-2xl mx-auto mt-12">
+            <div className="mx-auto w-20 h-20 bg-primary-container rounded-full flex items-center justify-center mb-6">
+              <QrCode className="w-10 h-10 text-on-primary-container" />
             </div>
-            <h3 className="text-lg font-medium text-slate-900 mb-2">No QR codes yet</h3>
-            <p className="text-slate-500 max-w-sm mx-auto mb-6">Create your first dynamic QR code to start sharing editable links with your audience.</p>
-            <Link 
-              to="/create" 
-              className="inline-flex bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 px-6 py-2.5 rounded-xl font-medium items-center space-x-2 transition-all"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Create First QR</span>
-            </Link>
+            <h3 className="text-2xl font-bold text-foreground mb-3">No QR codes yet</h3>
+            <p className="text-on-surface-variant max-w-sm mx-auto mb-8 text-base">Create your first dynamic QR code to start sharing editable links with your audience.</p>
+            <Button asChild variant="tonal" size="lg" className="rounded-full font-medium px-8 shadow-sm">
+              <Link to="/create">
+                <Plus className="w-5 h-5 mr-2" />
+                Create First QR
+              </Link>
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -143,41 +140,41 @@ const Dashboard = () => {
               const shortUrl = `https://dynamqr.vercel.app/${qr.short_code}`;
               
               return (
-                <div key={qr.id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-shadow group flex flex-col">
+                <div key={qr.id} className="bg-surface-container-low rounded-[1.5rem] p-6 shadow-sm border border-outline-variant hover:shadow-md hover:bg-surface-container transition-all group flex flex-col">
                   <div className="flex items-start space-x-4 mb-4">
-                    <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100 shrink-0">
+                    <div className="bg-white p-2 rounded-[1rem] shadow-sm shrink-0">
                       <QRCodeSVG value={shortUrl} size={80} level="M" />
                     </div>
                     <div className="flex-1 min-w-0 pt-1">
-                      <h3 className="text-sm font-semibold text-slate-900 truncate" title={qr.destination_url}>
+                      <h3 className="text-base font-semibold text-foreground truncate" title={qr.destination_url}>
                         {qr.destination_url}
                       </h3>
-                      <div className="flex items-center space-x-1 mt-1 text-xs text-indigo-600 font-medium bg-indigo-50 px-2 py-1 rounded-md w-fit">
+                      <div className="flex items-center space-x-1 mt-2 text-sm font-medium text-on-secondary-container bg-secondary-container px-3 py-1 rounded-full w-fit">
                         <span className="truncate max-w-[120px]">/{qr.short_code}</span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-2">
+                      <p className="text-xs font-medium text-on-surface-variant mt-3">
                         {new Date(qr.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                   
-                  <div className="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center">
-                    <div className="flex space-x-2">
-                      <button className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-md hover:bg-indigo-50 transition-colors" title="Edit URL">
-                        <Edit className="w-4 h-4" />
+                  <div className="mt-auto pt-4 border-t border-outline-variant flex justify-between items-center">
+                    <div className="flex space-x-1">
+                      <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-variant transition-colors" title="Edit URL">
+                        <Edit className="w-5 h-5" />
                       </button>
-                      <button className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-md hover:bg-indigo-50 transition-colors" title="Download QR">
-                        <Download className="w-4 h-4" />
+                      <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-variant transition-colors" title="Download QR">
+                        <Download className="w-5 h-5" />
                       </button>
-                      <a href={shortUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-md hover:bg-indigo-50 transition-colors" title="Test Link">
-                        <ExternalLink className="w-4 h-4" />
+                      <a href={shortUrl} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-variant transition-colors" title="Test Link">
+                        <ExternalLink className="w-5 h-5" />
                       </a>
                     </div>
                     <button 
                       onClick={() => handleDelete(qr.id)}
-                      className="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-colors" title="Delete"
+                      className="text-on-surface-variant hover:text-error p-2 rounded-full hover:bg-error-container transition-colors" title="Delete"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
@@ -191,3 +188,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

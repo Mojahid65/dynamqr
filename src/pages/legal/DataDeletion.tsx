@@ -60,7 +60,7 @@ const DataDeletion = () => {
         from the email address linked to your DynamQR account, with the
         subject:
       </p>
-      <pre className="bg-white/5 border border-white/10 rounded-xl p-4 my-4 text-sm overflow-x-auto"><code>Delete my DynamQR account</code></pre>
+      <pre className="bg-surface/5 border border-white/10 rounded-[2rem] p-4 my-4 text-sm overflow-x-auto"><code>Delete my DynamQR account</code></pre>
       <p>
         We will process the request within 7 business days and confirm by
         email when it's complete.

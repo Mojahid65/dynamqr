@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Link as LinkIcon, Save, Check } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { Button } from '../components/ui/button';
 
 const CreateQR = () => {
   const { user } = useAuth();
@@ -52,16 +53,16 @@ const CreateQR = () => {
   const previewShortUrl = `https://dynamqr.vercel.app/YOUR_CODE`;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <nav className="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center space-x-4">
-              <Link to="/" className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-colors">
-                <ArrowLeft className="w-5 h-5" />
+              <Link to="/" className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-variant transition-colors">
+                <ArrowLeft className="w-6 h-6" />
               </Link>
-              <h1 className="text-xl font-bold text-slate-900">Create New QR Code</h1>
+              <h1 className="text-2xl font-bold text-foreground">Create New QR Code</h1>
             </div>
           </div>
         </div>
@@ -73,53 +74,52 @@ const CreateQR = () => {
           
           {/* Form Column */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900 mb-6">QR Code Details</h2>
+            <div className="bg-surface-container-low rounded-[2rem] p-8 md:p-10 shadow-sm border border-outline-variant">
+              <h2 className="text-2xl font-bold text-foreground mb-8">QR Code Details</h2>
               
               {error && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 text-sm border border-red-100 flex items-start space-x-3">
+                <div className="bg-error-container text-on-error-container p-4 rounded-2xl mb-6 text-sm flex items-start space-x-3">
                   <div className="shrink-0 mt-0.5">⚠️</div>
                   <div>{error}</div>
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Destination URL */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Destination URL</label>
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-on-surface ml-1">Destination URL</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <LinkIcon className="h-5 w-5 text-slate-400" />
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <LinkIcon className="h-5 w-5 text-on-surface-variant" />
                     </div>
                     <input
                       type="text"
                       required
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-slate-900 transition-all"
+                      className="w-full pl-12 pr-4 py-4 bg-surface-container-highest border-b-2 border-outline focus:border-primary rounded-t-xl rounded-b-none focus:outline-none text-foreground placeholder-on-surface-variant/50 transition-colors"
                       placeholder="e.g., example.com/my-portfolio"
                     />
                   </div>
-                  <p className="text-xs text-slate-500">The link where your QR code will redirect to.</p>
+                  <p className="text-sm font-medium text-on-surface-variant ml-1">The link where your QR code will redirect to.</p>
                 </div>
 
-
-
-                <div className="pt-6">
-                  <button
+                <div className="pt-4">
+                  <Button
                     type="submit"
                     disabled={loading || !url}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-foreground font-medium py-3.5 rounded-xl flex items-center justify-center space-x-2 transition-all shadow-md shadow-indigo-200 disabled:opacity-50 disabled:shadow-none"
+                    className="w-full"
+                    size="lg"
                   >
                     {loading ? (
-                      <span className="flex items-center"><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Saving...</span>
+                      <span className="flex items-center"><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Saving...</span>
                     ) : (
                       <>
-                        <Save className="w-5 h-5" />
+                        <Save className="w-5 h-5 mr-2" />
                         <span>Save & Generate QR</span>
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>
@@ -127,11 +127,11 @@ const CreateQR = () => {
 
           {/* Preview Column */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 sticky top-24 flex flex-col items-center text-center">
-              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-6">Live Preview</h3>
+            <div className="bg-surface-container-low rounded-[2rem] p-8 shadow-sm border border-outline-variant sticky top-24 flex flex-col items-center text-center">
+              <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-8">Live Preview</h3>
               
-              <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 relative group">
-                <div className="absolute inset-0 bg-indigo-500/5 rounded-2xl scale-105 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-outline-variant mb-8 relative group">
+                <div className="absolute inset-0 bg-primary/5 rounded-[1.5rem] scale-105 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <QRCodeSVG 
                   value={url ? previewShortUrl : 'https://dynamqr.vercel.app'} 
                   size={180} 
@@ -140,24 +140,30 @@ const CreateQR = () => {
                 />
               </div>
 
-              <div className="w-full bg-slate-50 rounded-xl p-3 border border-slate-100">
-                <p className="text-xs text-slate-400 mb-1">Your short link will be:</p>
-                <p className="text-sm font-mono text-indigo-600 break-all">
+              <div className="w-full bg-surface-container rounded-2xl p-4 border border-outline-variant">
+                <p className="text-xs font-semibold text-on-surface-variant mb-1">Your short link will be:</p>
+                <p className="text-base font-mono font-medium text-primary break-all">
                   domain.com/YOUR_CODE
                 </p>
               </div>
 
-              <div className="mt-6 w-full space-y-3">
-                <div className="flex items-center text-sm text-slate-600">
-                  <Check className="w-4 h-4 text-green-500 mr-2 shrink-0" />
+              <div className="mt-8 w-full space-y-4">
+                <div className="flex items-center text-sm font-medium text-on-surface">
+                  <div className="bg-primary-container p-1 rounded-full mr-3 shrink-0">
+                    <Check className="w-4 h-4 text-on-primary-container" />
+                  </div>
                   <span>Update URL anytime</span>
                 </div>
-                <div className="flex items-center text-sm text-slate-600">
-                  <Check className="w-4 h-4 text-green-500 mr-2 shrink-0" />
-                  <span>QR code stays the same</span>
+                <div className="flex items-center text-sm font-medium text-on-surface">
+                  <div className="bg-primary-container p-1 rounded-full mr-3 shrink-0">
+                    <Check className="w-4 h-4 text-on-primary-container" />
+                  </div>
+                  <span>QR stays the same</span>
                 </div>
-                <div className="flex items-center text-sm text-slate-600">
-                  <Check className="w-4 h-4 text-green-500 mr-2 shrink-0" />
+                <div className="flex items-center text-sm font-medium text-on-surface">
+                  <div className="bg-primary-container p-1 rounded-full mr-3 shrink-0">
+                    <Check className="w-4 h-4 text-on-primary-container" />
+                  </div>
                   <span>Track scans (Coming soon)</span>
                 </div>
               </div>

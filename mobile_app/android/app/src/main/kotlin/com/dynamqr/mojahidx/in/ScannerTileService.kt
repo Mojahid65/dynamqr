@@ -7,9 +7,8 @@ import android.service.quicksettings.TileService
 class ScannerTileService : TileService() {
     override fun onClick() {
         super.onClick()
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            data = Uri.parse("dynamqr://app/scan")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = Intent(this, ScreenCaptureActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
         
         // Android 14+ requires starting activity via startActivityAndCollapse method
