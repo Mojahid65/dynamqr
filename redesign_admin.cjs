@@ -1,370 +1,19 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../components/AuthProvider';
-import { supabase } from '../lib/supabase';
-import { 
-  LogOut, ArrowLeft, Check, X, ShieldAlert, Users, Search, Bell, Activity, 
-  AlertTriangle, UploadCloud, Send, CheckSquare, Square, Menu,
-  Settings, LayoutDashboard, RefreshCw, SmartphoneNfc, Image as ImageIcon,
-  Home, X as CloseIcon, History, Trash2, QrCode, Edit
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
+const fs = require('fs');
+const path = 'C:/Users/mojah/OneDrive/Desktop/Dynamic qr code maker/src/pages/Admin.tsx';
 
-type QRCodeData = {
-  id: string;
-  short_code: string;
-  keyword: string | null;
-  destination_url: string;
-  user_id: string;
-  created_at: string;
-};
+let content = fs.readFileSync(path, 'utf8');
 
-type AppUpdate = {
-  id: string;
-  version_code: number;
-  version_name: string;
-  update_url: string;
-  release_notes: string;
-  is_mandatory: boolean;
-  created_at: string;
-};
+// Find where the return statement starts (around line 367)
+const returnIndex = content.indexOf('return (', content.indexOf('const totalUpdates = updates.length;'));
 
-type Profile = {
-  id: string;
-  email: string;
-  device_name: string | null;
-  android_version: string | null;
-  is_banned: boolean;
-  push_token?: string | null;
-  created_at: string;
-};
+if (returnIndex === -1) {
+    console.error('Could not find return statement');
+    process.exit(1);
+}
 
-type NotificationHistory = {
-  id: string;
-  title: string;
-  body: string;
-  image_url: string | null;
-  target_users: string[];
-  created_at: string;
-};
+const logicPart = content.substring(0, returnIndex);
 
-const Admin = () => {
-  const { user, signOut } = useAuth();
-  const [updates, setUpdates] = useState<AppUpdate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [notificationHistory, setNotificationHistory] = useState<NotificationHistory[]>([]);
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
-
-  // Mobile Menu State
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'notifications' | 'updates' | 'settings' | 'qrcodes'>('overview');
-
-  // QR Code State
-  const [qrCodes, setQrCodes] = useState<QRCodeData[]>([]);
-  const [qrSearchQuery, setQrSearchQuery] = useState('');
-  const [editingQr, setEditingQr] = useState<QRCodeData | null>(null);
-  const [editUrl, setEditUrl] = useState('');
-
-  // Form State for Updates
-  const [versionCode, setVersionCode] = useState('');
-  const [versionName, setVersionName] = useState('');
-  const [updateUrl, setUpdateUrl] = useState('');
-  const [releaseNotes, setReleaseNotes] = useState('');
-  const [isMandatory, setIsMandatory] = useState(false);
-
-  // Push Notification State
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
-  
-  const [previewTitle, setPreviewTitle] = useState('');
-  const [previewBody, setPreviewBody] = useState('');
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
-
-  const fetchData = async () => {
-    setLoading(true);
-    
-    // Fetch Updates
-    const { data: updatesData, error: updatesError } = await supabase
-      .from('app_updates')
-      .select('*')
-      .order('version_code', { ascending: false });
-
-    if (updatesError) {
-      if (updatesError.code === '42P01') {
-        console.error("The 'app_updates' table does not exist.");
-      } else {
-        console.error('Error fetching updates:', updatesError);
-      }
-    } else if (updatesData) {
-      setUpdates(updatesData);
-    }
-
-    // Fetch Profiles
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-      
-    if (profilesData) setProfiles(profilesData);
-
-    // Fetch Settings
-    const { data: settingsData } = await supabase
-      .from('app_settings')
-      .select('maintenance_mode')
-      .eq('id', 1)
-      .single();
-    if (settingsData) setMaintenanceMode(settingsData.maintenance_mode);
-
-    // Fetch Notification History
-    const { data: historyData } = await supabase
-      .from('notifications_history')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (historyData) setNotificationHistory(historyData);
-
-    // Fetch QR Codes
-    const { data: qrData } = await supabase
-      .from('qr_codes')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (qrData) setQrCodes(qrData);
-
-    setLoading(false);
-  };
-
-  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL || user?.email === 'mojahidgfx@gmail.com';
-
-  useEffect(() => {
-    if (isAdmin) {
-      fetchData();
-    }
-  }, [isAdmin]);
-
-  const toggleMaintenanceMode = async () => {
-    const newVal = !maintenanceMode;
-    const { error } = await supabase
-      .from('app_settings')
-      .update({ maintenance_mode: newVal })
-      .eq('id', 1);
-    
-    if (!error) {
-      setMaintenanceMode(newVal);
-    } else {
-      alert('Failed to update maintenance mode: ' + error.message);
-    }
-  };
-
-  const handleUpdateQrUrl = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingQr || !editUrl) return;
-    setIsSubmitting(true);
-    const { error } = await supabase
-      .from('qr_codes')
-      .update({ destination_url: editUrl })
-      .eq('id', editingQr.id);
-    
-    if (!error) {
-      setQrCodes(qrCodes.map(q => q.id === editingQr.id ? { ...q, destination_url: editUrl } : q));
-      setEditingQr(null);
-      setEditUrl('');
-      alert('QR code updated successfully');
-    } else {
-      alert('Failed to update QR code: ' + error.message);
-    }
-    setIsSubmitting(false);
-  };
-
-  const toggleBan = async (userId: string, currentStatus: boolean) => {
-    const newVal = !currentStatus;
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_banned: newVal })
-      .eq('id', userId);
-
-    if (!error) {
-      setProfiles(profiles.map(p => p.id === userId ? { ...p, is_banned: newVal } : p));
-    } else {
-      alert('Failed to update user status: ' + error.message);
-    }
-  };
-
-  const handlePublishUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isAdmin) return;
-    setIsSubmitting(true);
-    
-    const { error } = await supabase
-      .from('app_updates')
-      .insert([
-        {
-          version_code: parseInt(versionCode),
-          version_name: versionName,
-          update_url: updateUrl,
-          release_notes: releaseNotes,
-          is_mandatory: isMandatory,
-        }
-      ]);
-
-    if (error) {
-      console.error('Error adding update:', error);
-      alert('Failed to add update: ' + error.message);
-    } else {
-      setVersionCode('');
-      setVersionName('');
-      setUpdateUrl('');
-      setReleaseNotes('');
-      setIsMandatory(false);
-      fetchData();
-      alert('Update published successfully!');
-    }
-    setIsSubmitting(false);
-  };
-
-  // Selection Logic
-  const toggleSelectUser = (id: string) => {
-    setSelectedUsers(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedUsers.length === profiles.length && profiles.length > 0) {
-      setSelectedUsers([]);
-    } else {
-      setSelectedUsers(profiles.map(p => p.id));
-    }
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedImageFile(file);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setPreviewImage(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSendNotification = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!previewTitle || !previewBody) {
-      alert('Title and body are required.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    let finalImageUrl: string | undefined = undefined;
-
-    try {
-      if (selectedImageFile) {
-        const fileExt = selectedImageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('notifications')
-          .upload(filePath, selectedImageFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('notifications')
-          .getPublicUrl(filePath);
-
-        finalImageUrl = publicUrl;
-      }
-
-      const isBroadcast = selectedUsers.length === 0;
-      let tokens: string[] = [];
-      let targetEmails: string[] = [];
-      
-      if (!isBroadcast) {
-        const selectedProfiles = profiles.filter(p => selectedUsers.includes(p.id));
-        tokens = selectedProfiles.map(p => p.push_token).filter(Boolean) as string[];
-        targetEmails = selectedProfiles.map(p => p.email);
-        
-        if (tokens.length === 0) {
-          throw new Error('None of the selected users have Push Enabled. Please select users with valid push tokens.');
-        }
-      }
-
-      const payload = {
-        title: previewTitle,
-        body: previewBody,
-        imageUrl: finalImageUrl,
-        tokens: isBroadcast ? undefined : tokens
-      };
-
-      const { data, error } = await supabase.functions.invoke('send_push_notification', {
-        body: payload
-      });
-
-      if (error) throw error;
-      
-      if (data?.failedTokens && data.failedTokens.length > 0) {
-         for (const deadToken of data.failedTokens) {
-           await supabase.from('profiles').update({ push_token: null }).eq('push_token', deadToken);
-         }
-      }
-
-      await supabase.from('notifications_history').insert([{
-        title: previewTitle,
-        body: previewBody,
-        image_url: finalImageUrl,
-        target_users: isBroadcast ? ['All Users'] : targetEmails
-      }]);
-
-      alert(`Push notification sent successfully!`);
-      
-      setIsNotificationModalOpen(false);
-      setSelectedUsers([]);
-      setPreviewTitle('');
-      setPreviewBody('');
-      setPreviewImage(null);
-      setSelectedImageFile(null);
-      fetchData(); 
-    } catch (err: any) {
-      console.error(err);
-      alert('Failed to send notification: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="bg-card p-8 rounded-[2rem] shadow-2xl border border-border max-w-md w-full text-center relative overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-red-500/20 blur-[100px] pointer-events-none"></div>
-          <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
-            <ShieldAlert className="w-10 h-10 text-red-500" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-3 tracking-tight">Access Denied</h1>
-          <p className="text-muted-foreground mb-8 leading-relaxed text-sm">
-            You do not have permission to view the Admin Panel. This area is restricted to administrators only.
-          </p>
-          <Link 
-            to="/" 
-            className="inline-flex items-center justify-center w-full bg-white hover:bg-gray-100 text-black font-semibold py-3.5 px-4 rounded-full transition-all duration-300 transform hover:scale-[1.02] active:scale-95"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" /> Return to Dashboard
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const totalUsers = profiles.length;
-  const pushEnabledUsers = profiles.filter(p => p.push_token).length;
-  const totalUpdates = updates.length;
-
-  return (
+const m3RenderPart = `return (
     <div className="min-h-screen bg-background text-foreground font-sans flex overflow-hidden">
       {/* Expressive Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-surface-variant/20 via-background to-background">
@@ -373,11 +22,11 @@ const Admin = () => {
       </div>
 
       {/* M3 Navigation Drawer (Desktop) */}
-      <nav className={`
+      <nav className={\`
         fixed inset-y-0 left-0 z-40 w-72 bg-surface-container shadow-lg transform transition-transform duration-300 ease-in-out flex flex-col border-r border-outline-variant
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        \${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
         md:relative md:translate-x-0
-      `}>
+      \`}>
         <div className="h-20 flex items-center px-6">
           <div className="flex items-center gap-3 font-bold text-xl text-foreground">
             <div className="bg-primary-container p-2.5 rounded-full text-on-primary-container">
@@ -401,13 +50,13 @@ const Admin = () => {
             <button 
               key={item.id}
               onClick={() => { setActiveTab(item.id as any); setIsMobileMenuOpen(false); }} 
-              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-full font-medium transition-all duration-200 ${
+              className={\`w-full flex items-center gap-4 px-4 py-3.5 rounded-full font-medium transition-all duration-200 \${
                 activeTab === item.id 
                   ? 'bg-secondary-container text-on-secondary-container' 
                   : 'text-on-surface hover:bg-surface-variant/50 hover:text-foreground'
-              }`}
+              }\`}
             >
-              <item.icon className={`w-5 h-5 ${activeTab === item.id ? 'text-on-secondary-container' : 'text-on-surface-variant'}`} /> 
+              <item.icon className={\`w-5 h-5 \${activeTab === item.id ? 'text-on-secondary-container' : 'text-on-surface-variant'}\`} /> 
               {item.label}
             </button>
           ))}
@@ -472,7 +121,7 @@ const Admin = () => {
                 ].map((stat, i) => (
                   <div key={i} className="bg-surface-container rounded-[2rem] p-6 shadow-sm border border-outline-variant hover:bg-surface-container-high transition-colors group">
                     <div className="flex items-center gap-4 mb-6">
-                      <div className={`p-3 rounded-2xl bg-${stat.color}-container text-on-${stat.color}-container group-hover:scale-110 transition-transform`}>
+                      <div className={\`p-3 rounded-2xl bg-\${stat.color}-container text-on-\${stat.color}-container group-hover:scale-110 transition-transform\`}>
                         <stat.icon className="w-6 h-6" />
                       </div>
                     </div>
@@ -495,7 +144,7 @@ const Admin = () => {
                     className="flex items-center gap-2 bg-primary text-on-primary hover:bg-primary/90 font-medium py-2.5 px-6 rounded-full shadow-md transition-all text-sm"
                   >
                     <Send className="w-4 h-4" /> 
-                    {selectedUsers.length > 0 ? `Notify ${selectedUsers.length} Users` : 'Broadcast'}
+                    {selectedUsers.length > 0 ? \`Notify \${selectedUsers.length} Users\` : 'Broadcast'}
                   </button>
                 </div>
                 
@@ -519,7 +168,7 @@ const Admin = () => {
                         <tr><td colSpan={5} className="px-6 py-12 text-center text-on-surface-variant">No users found.</td></tr>
                       )}
                       {profiles.map(p => (
-                        <tr key={p.id} className={`hover:bg-surface-container-high transition-colors ${selectedUsers.includes(p.id) ? 'bg-primary/5' : ''}`}>
+                        <tr key={p.id} className={\`hover:bg-surface-container-high transition-colors \${selectedUsers.includes(p.id) ? 'bg-primary/5' : ''}\`}>
                           <td className="px-6 py-4">
                             <button onClick={() => toggleSelectUser(p.id)} className="text-on-surface-variant hover:text-primary transition-colors">
                               {selectedUsers.includes(p.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
@@ -539,7 +188,7 @@ const Admin = () => {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2 text-on-surface-variant">
                               <SmartphoneNfc className="w-4 h-4" />
-                              {p.device_name || 'Unknown'} {p.android_version ? `(A${p.android_version})` : ''}
+                              {p.device_name || 'Unknown'} {p.android_version ? \`(A\${p.android_version})\` : ''}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -556,7 +205,7 @@ const Admin = () => {
                           <td className="px-6 py-4 text-right">
                             <button 
                               onClick={() => toggleBan(p.id, p.is_banned)}
-                              className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${p.is_banned ? 'bg-surface-variant text-on-surface hover:bg-surface-container-highest' : 'bg-error-container text-on-error-container hover:bg-error/90 hover:text-on-error'}`}
+                              className={\`px-4 py-2 rounded-full text-xs font-bold transition-colors \${p.is_banned ? 'bg-surface-variant text-on-surface hover:bg-surface-container-highest' : 'bg-error-container text-on-error-container hover:bg-error/90 hover:text-on-error'}\`}
                             >
                               {p.is_banned ? 'Unban User' : 'Ban User'}
                             </button>
@@ -605,7 +254,7 @@ const Admin = () => {
                             </div>
                             <p className="text-sm text-on-surface-variant mb-4">{item.body}</p>
                             <span className="text-xs font-medium text-primary bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
-                              Targets: {item.target_users.length > 5 ? `${item.target_users.length} users` : item.target_users.join(', ')}
+                              Targets: {item.target_users.length > 5 ? \`\${item.target_users.length} users\` : item.target_users.join(', ')}
                             </span>
                           </div>
                         </div>
@@ -834,9 +483,9 @@ const Admin = () => {
                     </div>
                     <button 
                       onClick={toggleMaintenanceMode}
-                      className={`relative w-16 h-8 rounded-full transition-colors flex items-center p-1 focus:outline-none ${maintenanceMode ? 'bg-error' : 'bg-surface-variant'}`}
+                      className={\`relative w-16 h-8 rounded-full transition-colors flex items-center p-1 focus:outline-none \${maintenanceMode ? 'bg-error' : 'bg-surface-variant'}\`}
                     >
-                      <span className={`w-6 h-6 bg-surface-container-lowest rounded-full shadow-md transform transition-transform duration-300 ${maintenanceMode ? 'translate-x-8' : 'translate-x-0'}`} />
+                      <span className={\`w-6 h-6 bg-surface-container-lowest rounded-full shadow-md transform transition-transform duration-300 \${maintenanceMode ? 'translate-x-8' : 'translate-x-0'}\`} />
                     </button>
                   </div>
                 </div>
@@ -861,7 +510,7 @@ const Admin = () => {
                 </h3>
                 <p className="text-sm text-on-surface-variant mt-1">
                   {selectedUsers.length > 0 
-                    ? `Targeting ${selectedUsers.length} selected user(s)` 
+                    ? \`Targeting \${selectedUsers.length} selected user(s)\` 
                     : 'Broadcasting to all registered users'}
                 </p>
               </div>
@@ -1018,3 +667,10 @@ const Admin = () => {
 };
 
 export default Admin;
+`;
+
+// Replace the return block
+const newContent = logicPart + m3RenderPart;
+
+fs.writeFileSync(path, newContent, 'utf8');
+console.log('Redesign complete!');

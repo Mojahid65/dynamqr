@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthProvider';
+import { ThemeProvider } from './components/ThemeProvider';
+import { AppRecommendation } from './components/AppRecommendation';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -26,7 +28,8 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <ThemeProvider defaultTheme="dark" storageKey="dynamqr-theme">
+        <Router>
         <div className="min-h-screen bg-background font-sans antialiased text-foreground">
           <Routes>
             <Route path="/landing" element={<Landing />} />
@@ -82,8 +85,10 @@ function App() {
             <Route path="/:shortCode" element={<Redirect />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
+          <AppRecommendation />
         </div>
-      </Router>
+        </Router>
+      </ThemeProvider>
     </AuthProvider>
   );
 }
