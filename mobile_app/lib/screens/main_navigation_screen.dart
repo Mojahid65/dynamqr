@@ -60,11 +60,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   Future<void> _onCreatePressed() async {
     if (_currentIndex == 0) {
-      final result = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: (_) => const CreateQrScreen(),
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateQrScreen()),
       );
       if (result == true) _dashboardKey.currentState?.refresh(fromCreate: true);
     } else {

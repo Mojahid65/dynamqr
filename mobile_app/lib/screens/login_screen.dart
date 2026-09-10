@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -48,7 +47,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       // Avoid overriding an in-flight explicit sign-in.
       if (_isGoogleLoading) return;
-      unawaited(_persistDeviceInfo());
       appRouter.go('/');
     });
   }
@@ -71,33 +69,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  Future<void> _persistDeviceInfo() async {
-    try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
-
-      final deviceInfo = DeviceInfoPlugin();
-      String deviceName = 'Unknown';
-      String osVersion = 'Unknown';
-      if (Platform.isAndroid) {
-        final info = await deviceInfo.androidInfo;
-        deviceName = '${info.manufacturer} ${info.model}';
-        osVersion = info.version.release;
-      } else if (Platform.isIOS) {
-        final info = await deviceInfo.iosInfo;
-        deviceName = info.name;
-        osVersion = info.systemVersion;
-      }
-      await supabase.from('profiles').update({
-        'device_name': deviceName,
-        'android_version': osVersion,
-      }).eq('id', user.id);
-    } catch (e) {
-      debugPrint('Failed to persist device info: $e');
-    }
   }
 
   Future<void> _showVerificationDialog(String email) async {
@@ -231,7 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
           debugPrint('Failed to check ban status: $e');
         }
 
-        await _persistDeviceInfo();
         if (mounted) context.go('/');
       } else {
         final email = _emailController.text.trim();
@@ -289,9 +259,6 @@ class _LoginScreenState extends State<LoginScreen> {
         if (Supabase.instance.client.auth.currentSession != null) break;
         await Future.delayed(const Duration(milliseconds: 100));
       }
-
-      // Fire-and-forget profile update; don't block navigation on it.
-      unawaited(_persistDeviceInfo());
 
       if (!mounted) return;
 

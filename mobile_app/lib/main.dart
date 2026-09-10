@@ -6,6 +6,10 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:in_app_review/in_app_review.dart';
 import 'core/app_theme.dart';
 import 'core/constants.dart';
 import 'core/google_auth_service.dart';
@@ -79,7 +83,10 @@ Future<void> main() async {
     final notification = message.notification;
     if (notification == null) return;
     
-    String? imageUrl = notification.android?.imageUrl ?? notification.apple?.imageUrl;
+    String? imageUrl = notification.android?.imageUrl ?? 
+                       notification.apple?.imageUrl ?? 
+                       message.data['imageUrl'] ?? 
+                       message.data['image'];
     String? link = message.data['link'] ?? message.data['url'];
     
     await NotificationService().showNotification(
@@ -156,6 +163,24 @@ Future<void> main() async {
   }
 
   final prefs = await SharedPreferences.getInstance();
+  
+  int appOpens = prefs.getInt('app_opens') ?? 0;
+  appOpens++;
+  await prefs.setInt('app_opens', appOpens);
+  
+  if (appOpens == 3 || appOpens == 10) {
+    Future.delayed(const Duration(seconds: 3), () async {
+      try {
+        final InAppReview inAppReview = InAppReview.instance;
+        if (await inAppReview.isAvailable()) {
+          inAppReview.requestReview();
+        }
+      } catch (e) {
+        debugPrint('Review prompt failed: $e');
+      }
+    });
+  }
+
   final hasCompletedOnboarding =
       prefs.getBool('has_completed_onboarding') ?? false;
   final hasCompletedPermissions =
@@ -295,6 +320,32 @@ class _MyAppState extends State<MyApp> {
   /// provider notification, losing in-flight redirect listeners.
   late final GoRouter _router;
   late final StreamSubscription<AuthState> _navAuthSub;
+  late StreamSubscription _intentDataStreamSubscription;
+  final MobileScannerController _scannerController = MobileScannerController();
+  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
+  Future<void> _handleSharedImage(String path) async {
+    try {
+      final capture = await _scannerController.analyzeImage(path);
+      if (capture != null && capture.barcodes.isNotEmpty) {
+        final String? rawValue = capture.barcodes.first.rawValue;
+        if (rawValue != null) {
+          final uri = Uri.tryParse(rawValue);
+          if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } else {
+             scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text('Scanned: $rawValue')));
+          }
+          return;
+        }
+      }
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('QR not detected')),
+      );
+    } catch (e) {
+      debugPrint('Error scanning shared image: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -353,6 +404,23 @@ class _MyAppState extends State<MyApp> {
       }
     });
 
+    // Handle sharing intents while running
+    _intentDataStreamSubscription = ReceiveSharingIntent.getMediaStream().listen((List<SharedMediaFile> value) {
+      if (value.isNotEmpty) {
+        _handleSharedImage(value.first.path);
+      }
+    }, onError: (err) {
+      debugPrint("getIntentDataStream error: $err");
+    });
+
+    // Handle sharing intent on cold start
+    ReceiveSharingIntent.getInitialMedia().then((List<SharedMediaFile> value) {
+      if (value.isNotEmpty) {
+        _handleSharedImage(value.first.path);
+      }
+      ReceiveSharingIntent.reset();
+    });
+
     // Remove the native splash as soon as the first frame is rendered.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_splashRemoved) {
@@ -378,6 +446,8 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _intentDataStreamSubscription.cancel();
+    _scannerController.dispose();
     _navAuthSub.cancel();
     _authRefresh.dispose();
     super.dispose();
@@ -520,6 +590,7 @@ class _MyAppState extends State<MyApp> {
                 );
 
             return MaterialApp.router(
+              scaffoldMessengerKey: scaffoldMessengerKey,
               title: 'DynamQR',
               debugShowCheckedModeBanner: false,
               themeMode: themeProvider.themeMode,

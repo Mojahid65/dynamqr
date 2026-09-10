@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:in_app_review/in_app_review.dart';
 import '../core/google_auth_service.dart';
 import '../widgets/qr_list_item.dart';
 import 'scanner_screen.dart';
@@ -91,6 +92,43 @@ class DashboardScreenState extends State<DashboardScreen> {
     // the session the user just signed out of.
     await GoogleAuthService.instance.signOut(supabase: _supabase);
     if (mounted) context.go('/login');
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 36),
+        title: const Text('Delete Account?'),
+        content: const Text(
+          'This action will permanently delete your account, all dynamic QR codes, analytics, and settings. It cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        try {
+          await _supabase.from('qr_codes').delete().eq('user_id', user.id);
+          await _supabase.from('profiles').delete().eq('id', user.id);
+        } catch (e) {
+          debugPrint('Account cleanup error: $e');
+        }
+      }
+      await _signOut();
+    }
   }
 
   Future<void> _deleteQrCode(String id) async {
@@ -237,14 +275,32 @@ class DashboardScreenState extends State<DashboardScreen> {
               },
             ),
             _DrawerTile(
+              icon: Icons.public_rounded,
+              label: 'Global Analytics (Beta)',
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Global Heatmap coming in next update!')),
+                );
+              },
+            ),
+            _DrawerTile(
               icon: Icons.share_outlined,
               label: 'Share App',
               onTap: () {
                 Navigator.pop(context);
                 SharePlus.instance.share(ShareParams(
                   text:
-                      'Check out DynamQR, the smartest way to manage dynamic QR codes! https://dynamqr.vercel.app',
+                      'Check out DynamQR, the smartest way to manage dynamic QR codes! Download here: https://play.google.com/store/apps/details?id=com.dynamqr.mojahidx.in',
                 ));
+              },
+            ),
+            _DrawerTile(
+              icon: Icons.star_rate_rounded,
+              label: 'Rate Us',
+              onTap: () {
+                Navigator.pop(context);
+                InAppReview.instance.openStoreListing(appStoreId: 'com.dynamqr.mojahidx.in');
               },
             ),
             Padding(
@@ -354,23 +410,46 @@ class DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _signOut();
-                  },
-                  icon: Icon(Icons.logout_rounded, color: cs.error),
-                  label: Text(
-                    'Log Out',
-                    style: TextStyle(color: cs.error),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _deleteAccount();
+                      },
+                      icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+                      label: const Text(
+                        'Delete Account',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _signOut();
+                      },
+                      icon: Icon(Icons.logout_rounded, color: cs.error),
+                      label: Text(
+                        'Log Out',
+                        style: TextStyle(color: cs.error),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

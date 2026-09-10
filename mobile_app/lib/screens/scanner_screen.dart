@@ -112,7 +112,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No QR code found in the image.')),
+            const SnackBar(content: Text('QR not detected')),
           );
         }
       }

@@ -6,12 +6,14 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CreateQR from './pages/CreateQR';
+import BulkCreate from './pages/BulkCreate';
 import Admin from './pages/Admin';
 import Redirect from './pages/Redirect';
+import QRAuth from './pages/QRAuth';
 import Landing from './pages/Landing';
 import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import Terms from './pages/legal/Terms';
-import DataDeletion from './pages/legal/DataDeletion';
+import DeleteAccount from './pages/legal/DeleteAccount';
 import Support from './pages/legal/Support';
 import About from './pages/legal/About';
 import DeveloperPortal from './pages/DeveloperPortal';
@@ -44,8 +46,9 @@ function App() {
             <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/terms-of-service" element={<Navigate to="/terms" replace />} />
-            <Route path="/data-deletion" element={<DataDeletion />} />
-            <Route path="/account-deletion" element={<Navigate to="/data-deletion" replace />} />
+            <Route path="/delete-account" element={<DeleteAccount />} />
+            <Route path="/data-deletion" element={<DeleteAccount />} />
+            <Route path="/account-deletion" element={<Navigate to="/delete-account" replace />} />
             <Route path="/support" element={<Support />} />
             <Route path="/help" element={<Navigate to="/support" replace />} />
             <Route path="/about" element={<About />} />
@@ -77,11 +80,17 @@ function App() {
                 <CreateQR />
               </PrivateRoute>
             } />
+            <Route path="/bulk-create" element={
+              <PrivateRoute>
+                <BulkCreate />
+              </PrivateRoute>
+            } />
             <Route path="/admin" element={
               <PrivateRoute>
                 <Admin />
               </PrivateRoute>
             } />
+            <Route path="/qr-auth/:shortCode" element={<QRAuth />} />
             <Route path="/:shortCode" element={<Redirect />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>

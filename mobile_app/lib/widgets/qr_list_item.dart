@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/notification_service.dart';
 import 'dart:ui' as ui;
 import 'package:image/image.dart' as img_lib;
+import '../services/qr_customizer_service.dart';
 
 class QrListItemWidget extends StatefulWidget {
   final Map<String, dynamic> qr;
@@ -326,21 +327,20 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                   },
                   child: Hero(
                     tag: 'qr-${widget.qr['id']}',
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cs.outlineVariant),
-                      ),
-                      child: QrImageView(
-                        data: shortUrl,
-                        version: QrVersions.auto,
-                        size: 88,
-                        backgroundColor: Colors.white,
-                        eyeStyle: _getEyeStyle(),
-                        dataModuleStyle: _getModuleStyle(),
-                      ),
+                    child: CustomizedQrPreview(
+                      qrData: shortUrl,
+                      size: 84,
+                      theme: (widget.qr['design_config']?['dotType'] ?? widget.qr['design_config']?['theme'] ?? _selectedTheme),
+                      fgColor: _selectedColor,
+                      eyeColor: _selectedEyeColor,
+                      bgColor: Colors.white,
+                      bgType: widget.qr['design_config']?['bgType'] ?? 'color',
+                      bgImageUrl: widget.qr['design_config']?['bgImage'] ?? '',
+                      bgOpacity: (widget.qr['design_config']?['bgOpacity'] as num?)?.toDouble() ?? 0.85,
+                      frameId: widget.qr['design_config']?['frameId'] ?? 'none',
+                      logoType: widget.qr['design_config']?['logoType'] ?? 'none',
+                      logoPresetId: widget.qr['design_config']?['logoPresetId'] ?? 'link',
+                      logoUrl: widget.qr['design_config']?['logoUrl'] ?? '',
                     ),
                   ),
                 ),
@@ -350,48 +350,72 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.qr['destination_url'] ?? '',
-                        style: tt.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          height: 1.3,
+                        widget.qr['keyword'] != null 
+                            ? widget.qr['keyword'] 
+                            : (widget.qr['destination_url'] ?? ''),
+                        style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          height: 1.2,
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.qr['destination_url'] ?? '',
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: cs.secondaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.link_rounded,
-                              size: 12,
-                              color: cs.onSecondaryContainer,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '/$keyword',
-                              style: tt.labelSmall?.copyWith(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: cs.secondaryContainer,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.link_rounded,
+                                size: 12,
                                 color: cs.onSecondaryContainer,
-                                fontWeight: FontWeight.w600,
                               ),
-                            ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '/$keyword',
+                                style: tt.labelSmall?.copyWith(
+                                  color: cs.onSecondaryContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            if (widget.qr['is_password_protected'] == true)
+                              _buildBadge(context, 'Secured', Icons.lock_outline_rounded, Colors.orange),
+                            if ((widget.qr['rules'] as List?)?.isNotEmpty == true)
+                              _buildBadge(context, 'Smart Rules', Icons.smartphone_rounded, cs.primary),
+                            if ((widget.qr['schedules'] as List?)?.isNotEmpty == true)
+                              _buildBadge(context, 'Scheduled', Icons.schedule_rounded, Colors.purple),
                           ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          // Action row
+            // Action row
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: Row(
@@ -591,6 +615,32 @@ class _QrListItemWidgetState extends State<QrListItemWidget> {
         ],
       ),
     ));
+  }
+
+  Widget _buildBadge(BuildContext context, String text, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text.toUpperCase(),
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _styleLabel(BuildContext context, String text) {

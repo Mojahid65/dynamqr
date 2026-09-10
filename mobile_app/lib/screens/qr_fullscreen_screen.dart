@@ -5,6 +5,7 @@ import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:ui' as ui;
 import 'package:lottie/lottie.dart';
+import '../services/qr_customizer_service.dart';
 
 class QrFullscreenScreen extends StatefulWidget {
   final Map<String, dynamic> qrData;
@@ -180,14 +181,24 @@ class _QrFullscreenScreenState extends State<QrFullscreenScreen> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
+    final config = widget.qrData['design_config'] as Map<String, dynamic>? ?? {};
+    final theme = config['dotType'] ?? config['theme'] ?? widget.selectedTheme;
+    final bgType = config['bgType'] ?? 'color';
+    final bgImage = config['bgImage'] ?? '';
+    final bgOpacity = (config['bgOpacity'] as num?)?.toDouble() ?? 0.85;
+    final frameId = config['frameId'] ?? 'none';
+    final logoType = config['logoType'] ?? 'none';
+    final logoPresetId = config['logoPresetId'] ?? 'link';
+    final logoUrl = config['logoUrl'] ?? '';
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR Code'),
+        title: Text(widget.qrData['keyword'] ?? 'QR Preview'),
         actions: [
           IconButton(
-            tooltip: 'Share',
-            icon: const Icon(Icons.share_outlined),
             onPressed: _shareLink,
+            icon: const Icon(Icons.share_rounded),
+            tooltip: 'Share',
           ),
         ],
       ),
@@ -196,35 +207,27 @@ class _QrFullscreenScreenState extends State<QrFullscreenScreen> {
           children: [
             Expanded(
               child: Center(
-                child: Padding(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Hero(
                         tag: 'qr-${widget.qrData['id']}',
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(28),
-                            boxShadow: [
-                              BoxShadow(
-                                color: cs.shadow.withValues(alpha: 0.1),
-                                blurRadius: 32,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: QrImageView(
-                            data: widget.shortUrl,
-                            version: QrVersions.auto,
-                            size:
-                                MediaQuery.of(context).size.width * 0.72,
-                            backgroundColor: Colors.white,
-                            eyeStyle: _getEyeStyle(),
-                            dataModuleStyle: _getModuleStyle(),
-                          ),
+                        child: CustomizedQrPreview(
+                          qrData: widget.shortUrl,
+                          size: MediaQuery.of(context).size.width * 0.76,
+                          theme: theme,
+                          fgColor: widget.selectedColor,
+                          eyeColor: widget.selectedEyeColor,
+                          bgColor: Colors.white,
+                          bgType: bgType,
+                          bgImageUrl: bgImage,
+                          bgOpacity: bgOpacity,
+                          frameId: frameId,
+                          logoType: logoType,
+                          logoPresetId: logoPresetId,
+                          logoUrl: logoUrl,
                         ),
                       ),
                       const SizedBox(height: 32),
